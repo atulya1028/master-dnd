@@ -90,146 +90,138 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
         return Scaffold(
           backgroundColor: c.canvas,
           body: SafeArea(
-            child: Padding(
+            child: ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.symmetric(horizontal: Space.s24, vertical: Space.s16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Step 2: Profile Setup', style: context.text.labelSmall),
-                  const SizedBox(height: Space.s12),
-                  Text('Set Up Your Profile', style: context.text.displayLarge),
-                  const SizedBox(height: Space.s8),
-                  Text(
-                    'Personalize how Master DND greets you and organizes quiet hours.',
-                    style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
-                  ),
-                  const SizedBox(height: Space.s24),
+              children: [
+                Text('Step 2: Profile Setup', style: context.text.labelSmall),
+                const SizedBox(height: Space.s12),
+                Text('Set Up Your Profile', style: context.text.displayLarge),
+                const SizedBox(height: Space.s8),
+                Text(
+                  'Personalize how Master DND greets you and organizes quiet hours.',
+                  style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
+                ),
+                const SizedBox(height: Space.s24),
 
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        // Avatar selector preview
-                        Center(
-                          child: Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              color: c.accentTint,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: c.accent, width: 2),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              _selectedAvatar,
-                              style: context.text.displayLarge!.copyWith(color: c.accent),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: Space.s16),
-                        const Center(child: OverlineText('Choose an Avatar / Badge')),
-                        const SizedBox(height: Space.s8),
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: Space.s12,
-                          children: _avatarChoices.map((av) {
-                            final isSelected = av == _selectedAvatar;
-                            return GestureDetector(
-                              onTap: () => setState(() => _selectedAvatar = av),
-                              child: CircleAvatar(
-                                radius: 20,
-                                backgroundColor: isSelected ? c.accent : c.surfaceAlt,
-                                child: Text(
-                                  av,
-                                  style: TextStyle(
-                                    color: isSelected ? c.onAccent : c.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: Space.s24),
-
-                        // Full Name
-                        const OverlineText('Full Name *'),
-                        const SizedBox(height: Space.s8),
-                        DndCard(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                            child: TextField(
-                              controller: _nameController,
-                              textCapitalization: TextCapitalization.words,
-                              style: context.text.titleMedium,
-                              decoration: const InputDecoration(
-                                hintText: 'e.g. John Doe',
-                                border: InputBorder.none,
-                              ),
-                              onChanged: (val) {
-                                if (val.isNotEmpty && _avatarChoices.contains(val[0].toUpperCase())) {
-                                  setState(() => _selectedAvatar = val[0].toUpperCase());
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: Space.s16),
-
-                        // Email Address
-                        const OverlineText('Email Address (Optional)'),
-                        const SizedBox(height: Space.s8),
-                        DndCard(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                            child: TextField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              style: context.text.titleMedium,
-                              decoration: const InputDecoration(
-                                hintText: 'name@example.com',
-                                border: InputBorder.none,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: Space.s16),
-
-                        // Bio or Occupation
-                        const OverlineText('Role / Bio (Optional)'),
-                        const SizedBox(height: Space.s8),
-                        DndCard(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                            child: TextField(
-                              controller: _bioController,
-                              style: context.text.titleMedium,
-                              decoration: const InputDecoration(
-                                hintText: 'e.g. Software Engineer, Night Owl',
-                                border: InputBorder.none,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        if (_localError != null) ...[
-                          const SizedBox(height: Space.s16),
-                          Text(
-                            _localError!,
-                            style: context.text.bodySmall!.copyWith(color: c.critical),
-                          ),
-                        ],
-                      ],
+                // Avatar selector preview
+                Center(
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: c.accentTint,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: c.accent, width: 2),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _selectedAvatar,
+                      style: context.text.displayLarge!.copyWith(color: c.accent),
                     ),
                   ),
+                ),
+                const SizedBox(height: Space.s16),
+                const Center(child: OverlineText('Choose an Avatar / Badge')),
+                const SizedBox(height: Space.s8),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: Space.s12,
+                  children: _avatarChoices.map((av) {
+                    final isSelected = av == _selectedAvatar;
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedAvatar = av),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: isSelected ? c.accent : c.surfaceAlt,
+                        child: Text(
+                          av,
+                          style: TextStyle(
+                            color: isSelected ? c.onAccent : c.textPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: Space.s24),
 
+                // Full Name
+                const OverlineText('Full Name *'),
+                const SizedBox(height: Space.s8),
+                DndCard(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                    child: TextField(
+                      controller: _nameController,
+                      textCapitalization: TextCapitalization.words,
+                      style: context.text.titleMedium,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. John Doe',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (val) {
+                        if (val.isNotEmpty && _avatarChoices.contains(val[0].toUpperCase())) {
+                          setState(() => _selectedAvatar = val[0].toUpperCase());
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: Space.s16),
+
+                // Email Address
+                const OverlineText('Email Address (Optional)'),
+                const SizedBox(height: Space.s8),
+                DndCard(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                    child: TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: context.text.titleMedium,
+                      decoration: const InputDecoration(
+                        hintText: 'name@example.com',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: Space.s16),
+
+                // Bio or Occupation
+                const OverlineText('Role / Bio (Optional)'),
+                const SizedBox(height: Space.s8),
+                DndCard(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                    child: TextField(
+                      controller: _bioController,
+                      style: context.text.titleMedium,
+                      decoration: const InputDecoration(
+                        hintText: 'e.g. Software Engineer, Night Owl',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+
+                if (_localError != null) ...[
                   const SizedBox(height: Space.s16),
-                  if (isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    AppButton('Complete & Open Dashboard', onPressed: _handleSave),
-                  const SizedBox(height: Space.s12),
+                  Text(
+                    _localError!,
+                    style: context.text.bodySmall!.copyWith(color: c.critical),
+                  ),
                 ],
-              ),
+
+                const SizedBox(height: Space.s32),
+                if (isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  AppButton('Complete & Open Dashboard', onPressed: _handleSave),
+                const SizedBox(height: Space.s24),
+              ],
             ),
           ),
         );

@@ -85,91 +85,104 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
         return Scaffold(
           backgroundColor: c.canvas,
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.s24, vertical: Space.s16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: Space.s16),
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(color: c.accentTint, shape: BoxShape.circle),
-                    child: Icon(DndIcons.moon, size: 32, color: c.accent),
-                  ),
-                  const SizedBox(height: Space.s24),
-                  Text('Welcome to Master DND', style: context.text.displayLarge),
-                  const SizedBox(height: Space.s8),
-                  Text(
-                    'Enter your email address to receive a secure 6-digit verification code.',
-                    style: context.text.bodyLarge!.copyWith(color: c.textSecondary),
-                  ),
-                  const SizedBox(height: Space.s32),
-
-                  const OverlineText('Email Address'),
-                  const SizedBox(height: Space.s8),
-
-                  DndCard(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                      child: Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.symmetric(horizontal: Space.s24, vertical: Space.s16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - Space.s32,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.mail_outline, size: 20, color: c.textSecondary),
-                          const SizedBox(width: Space.s12),
-                          Expanded(
-                            child: TextField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              autocorrect: false,
-                              autofillHints: const [AutofillHints.email],
-                              style: context.text.titleMedium,
-                              decoration: const InputDecoration(
-                                hintText: 'you@example.com',
-                                border: InputBorder.none,
+                          const SizedBox(height: Space.s16),
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(color: c.accentTint, shape: BoxShape.circle),
+                            child: Icon(DndIcons.moon, size: 32, color: c.accent),
+                          ),
+                          const SizedBox(height: Space.s24),
+                          Text('Welcome to Master DND', style: context.text.displayLarge),
+                          const SizedBox(height: Space.s8),
+                          Text(
+                            'Enter your email address to receive a secure 6-digit verification code.',
+                            style: context.text.bodyLarge!.copyWith(color: c.textSecondary),
+                          ),
+                          const SizedBox(height: Space.s32),
+
+                          const OverlineText('Email Address'),
+                          const SizedBox(height: Space.s8),
+
+                          DndCard(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.mail_outline, size: 20, color: c.textSecondary),
+                                  const SizedBox(width: Space.s12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _emailController,
+                                      keyboardType: TextInputType.emailAddress,
+                                      autocorrect: false,
+                                      autofillHints: const [AutofillHints.email],
+                                      style: context.text.titleMedium,
+                                      decoration: const InputDecoration(
+                                        hintText: 'you@example.com',
+                                        border: InputBorder.none,
+                                      ),
+                                      onSubmitted: (_) => _handleSendOtp(),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              onSubmitted: (_) => _handleSendOtp(),
                             ),
                           ),
+
+                          if (_localError != null) ...[
+                            const SizedBox(height: Space.s12),
+                            Text(
+                              _localError!,
+                              style: context.text.bodySmall!.copyWith(color: c.critical),
+                            ),
+                          ],
+                          const SizedBox(height: Space.s16),
+                          Container(
+                            padding: const EdgeInsets.all(Space.s12),
+                            decoration: BoxDecoration(
+                              color: c.surfaceAlt,
+                              borderRadius: BorderRadius.circular(Radii.input),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.mark_email_read_outlined, size: 18, color: c.accent),
+                                const SizedBox(width: Space.s8),
+                                Expanded(
+                                  child: Text(
+                                    'A real 6-digit verification code will be sent to your email inbox.',
+                                    style: context.text.bodySmall!.copyWith(color: c.textSecondary),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          const SizedBox(height: Space.s24),
+                          if (isLoading)
+                            const Center(child: CircularProgressIndicator())
+                          else
+                            AppButton('Send Verification Code', onPressed: _handleSendOtp),
+                          const SizedBox(height: Space.s12),
                         ],
                       ),
                     ),
                   ),
-
-                  if (_localError != null) ...[
-                    const SizedBox(height: Space.s12),
-                    Text(
-                      _localError!,
-                      style: context.text.bodySmall!.copyWith(color: c.critical),
-                    ),
-                  ],
-                  const SizedBox(height: Space.s16),
-                  Container(
-                    padding: const EdgeInsets.all(Space.s12),
-                    decoration: BoxDecoration(
-                      color: c.surfaceAlt,
-                      borderRadius: BorderRadius.circular(Radii.input),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.mark_email_read_outlined, size: 18, color: c.accent),
-                        const SizedBox(width: Space.s8),
-                        Expanded(
-                          child: Text(
-                            'A real 6-digit verification code will be sent to your email inbox.',
-                            style: context.text.bodySmall!.copyWith(color: c.textSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Spacer(),
-                  if (isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    AppButton('Send Verification Code', onPressed: _handleSendOtp),
-                  const SizedBox(height: Space.s12),
-                ],
-              ),
+                );
+              },
             ),
           ),
         );

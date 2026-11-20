@@ -68,24 +68,27 @@ class _AuthGateState extends State<AuthGate> {
           AuthInitial() => Scaffold(
               backgroundColor: c.canvas,
               body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(color: c.accentTint, shape: BoxShape.circle),
-                      child: Icon(DndIcons.moon, size: 44, color: c.accent),
-                    ),
-                    const SizedBox(height: Space.s24),
-                    Text('Master DND', style: context.text.displayLarge),
-                    const SizedBox(height: Space.s16),
-                    SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2.5, color: c.accent),
-                    ),
-                  ],
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(Space.s24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 88,
+                        height: 88,
+                        decoration: BoxDecoration(color: c.accentTint, shape: BoxShape.circle),
+                        child: Icon(DndIcons.moon, size: 44, color: c.accent),
+                      ),
+                      const SizedBox(height: Space.s24),
+                      Text('Master DND', style: context.text.displayLarge),
+                      const SizedBox(height: Space.s16),
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2.5, color: c.accent),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

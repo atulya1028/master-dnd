@@ -124,107 +124,120 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         return Scaffold(
           backgroundColor: c.canvas,
           body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Space.s24, vertical: Space.s16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back),
-                    padding: EdgeInsets.zero,
-                    alignment: Alignment.centerLeft,
-                  ),
-                  const SizedBox(height: Space.s16),
-                  Text('Verify Email Address', style: context.text.displayLarge),
-                  const SizedBox(height: Space.s8),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        'Code sent to ',
-                        style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
-                      ),
-                      Text(
-                        widget.phone,
-                        style: context.text.labelLarge!.copyWith(color: c.accent, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: Space.s4),
-                  Text(
-                    'Check your inbox or spam folder.',
-                    style: context.text.bodySmall!.copyWith(color: c.textSecondary),
-                  ),
-                  const SizedBox(height: Space.s32),
-
-                  const OverlineText('6-Digit Verification Code'),
-                  const SizedBox(height: Space.s8),
-                  DndCard(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                      child: TextField(
-                        controller: _otpController,
-                        focusNode: _focusNode,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        textAlign: TextAlign.center,
-                        style: context.text.displayLarge!.copyWith(
-                          letterSpacing: 16,
-                          color: c.accent,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: '••••••',
-                          counterText: '',
-                          border: InputBorder.none,
-                        ),
-                        onChanged: (val) {
-                          if (val.length == 6) {
-                            _handleVerify();
-                          }
-                        },
-                      ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.symmetric(horizontal: Space.s24, vertical: Space.s16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight - Space.s32,
                     ),
-                  ),
-
-                  if (_localError != null) ...[
-                    const SizedBox(height: Space.s12),
-                    Text(
-                      _localError!,
-                      style: context.text.bodySmall!.copyWith(color: c.critical),
-                    ),
-                  ],
-
-                  const SizedBox(height: Space.s24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _secondsRemaining > 0
-                            ? 'Resend code in ${_secondsRemaining}s'
-                            : "Didn't receive the code?",
-                        style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
-                      ),
-                      TextButton(
-                        onPressed: _secondsRemaining == 0 ? _handleResend : null,
-                        child: Text(
-                          'Resend Code',
-                          style: context.text.labelLarge!.copyWith(
-                            color: _secondsRemaining == 0 ? c.accent : c.border,
+                    child: IntrinsicHeight(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.arrow_back),
+                            padding: EdgeInsets.zero,
+                            alignment: Alignment.centerLeft,
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
+                          const SizedBox(height: Space.s16),
+                          Text('Verify Email Address', style: context.text.displayLarge),
+                          const SizedBox(height: Space.s8),
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                'Code sent to ',
+                                style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
+                              ),
+                              Text(
+                                widget.phone,
+                                style: context.text.labelLarge!.copyWith(color: c.accent, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: Space.s4),
+                          Text(
+                            'Check your inbox or spam folder.',
+                            style: context.text.bodySmall!.copyWith(color: c.textSecondary),
+                          ),
+                          const SizedBox(height: Space.s32),
 
-                  const Spacer(),
-                  if (isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    AppButton('Verify & Continue', onPressed: _handleVerify),
-                  const SizedBox(height: Space.s12),
-                ],
-              ),
+                          const OverlineText('6-Digit Verification Code'),
+                          const SizedBox(height: Space.s8),
+                          DndCard(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                              child: TextField(
+                                controller: _otpController,
+                                focusNode: _focusNode,
+                                keyboardType: TextInputType.number,
+                                maxLength: 6,
+                                textAlign: TextAlign.center,
+                                style: context.text.displayLarge!.copyWith(
+                                  letterSpacing: 16,
+                                  color: c.accent,
+                                ),
+                                decoration: const InputDecoration(
+                                  hintText: '••••••',
+                                  counterText: '',
+                                  border: InputBorder.none,
+                                ),
+                                onChanged: (val) {
+                                  if (val.length == 6) {
+                                    _handleVerify();
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+
+                          if (_localError != null) ...[
+                            const SizedBox(height: Space.s12),
+                            Text(
+                              _localError!,
+                              style: context.text.bodySmall!.copyWith(color: c.critical),
+                            ),
+                          ],
+
+                          const SizedBox(height: Space.s24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _secondsRemaining > 0
+                                    ? 'Resend code in ${_secondsRemaining}s'
+                                    : "Didn't receive the code?",
+                                style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
+                              ),
+                              TextButton(
+                                onPressed: _secondsRemaining == 0 ? _handleResend : null,
+                                child: Text(
+                                  'Resend Code',
+                                  style: context.text.labelLarge!.copyWith(
+                                    color: _secondsRemaining == 0 ? c.accent : c.border,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const Spacer(),
+                          const SizedBox(height: Space.s24),
+                          if (isLoading)
+                            const Center(child: CircularProgressIndicator())
+                          else
+                            AppButton('Verify & Continue', onPressed: _handleVerify),
+                          const SizedBox(height: Space.s12),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         );
