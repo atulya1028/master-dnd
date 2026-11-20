@@ -32,6 +32,20 @@ const sendOtpHandler = async (req, res) => {
 
     const identifier = rawTarget.trim().toLowerCase();
 
+    // Optional email whitelist enforcement
+    if (process.env.ALLOWED_EMAILS && process.env.ALLOWED_EMAILS.trim().length > 0) {
+      const allowedList = process.env.ALLOWED_EMAILS
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.length > 0);
+      if (allowedList.length > 0 && !allowedList.includes(identifier)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access restricted: This email is not authorized to sign in.',
+        });
+      }
+    }
+
     const isProduction = process.env.NODE_ENV === 'production';
     // In production, ALWAYS enforce real OTP and never allow fixed dev OTP or expose testOtp.
     // In development, uses real OTP if REAL_OTP=true or if FIXED_DEV_OTP is unset.
@@ -102,6 +116,20 @@ const verifyOtpHandler = async (req, res) => {
     }
 
     const identifier = rawTarget.trim().toLowerCase();
+
+    // Optional email whitelist enforcement
+    if (process.env.ALLOWED_EMAILS && process.env.ALLOWED_EMAILS.trim().length > 0) {
+      const allowedList = process.env.ALLOWED_EMAILS
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.length > 0);
+      if (allowedList.length > 0 && !allowedList.includes(identifier)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access restricted: This email is not authorized to sign in.',
+        });
+      }
+    }
     const trimmedOtp = otp.toString().trim();
 
     let record = null;
