@@ -1,0 +1,25 @@
+name: master_dnd
+description: Master Do Not Disturb - one control center for every way a phone stays quiet.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  google_fonts: ^6.2.1
+  http: ^1.2.0
+  shared_preferences: ^2.2.2
+  flutter_bloc: ^8.1.6
+  equatable: ^2.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

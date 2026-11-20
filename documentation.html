@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Master DND - Project Technical Documentation</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+      @bottom-right {
+        content: counter(page);
+      }
+    }
+    
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #14172F;
+      background: #FFFFFF;
+      line-height: 1.55;
+      font-size: 10pt;
+    }
+
+    .page {
+      page-break-after: always;
+      position: relative;
+    }
+
+    .page:last-child {
+      page-break-after: avoid;
+    }
+
+    /* Cover Page */
+    .cover {
+      height: 94vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 10px;
+    }
+
+    .cover-top {
+      border-top: 6px solid #3F51B5;
+      padding-top: 30px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border-radius: 999px;
+      background: #E8EBFA;
+      color: #3F51B5;
+      margin-bottom: 20px;
+    }
+
+    .cover h1 {
+      font-size: 34pt;
+      font-weight: 800;
+      color: #14172F;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+
+    .cover .subtitle {
+      font-size: 14pt;
+      color: #5B6085;
+      font-weight: 400;
+      max-width: 600px;
+      line-height: 1.4;
+    }
+
+    .cover-meta {
+      border-top: 1px solid #E1E4F0;
+      padding-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .meta-item h4 {
+      font-size: 8pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #5B6085;
+      margin-bottom: 4px;
+    }
+
+    .meta-item p {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: #14172F;
+    }
+
+    /* Headings */
+    h2 {
+      font-size: 17pt;
+      font-weight: 700;
+      color: #14172F;
+      border-bottom: 2px solid #E8EBFA;
+      padding-bottom: 6px;
+      margin-top: 24px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    h3 {
+      font-size: 12pt;
+      font-weight: 600;
+      color: #3F51B5;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin-bottom: 10px;
+      color: #333854;
+    }
+
+    /* Cards & Containers */
+    .card {
+      background: #F6F7FB;
+      border: 1px solid #E1E4F0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      page-break-inside: avoid;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px 0;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid #E1E4F0;
+      text-align: left;
+    }
+
+    th {
+      background: #EEF0F8;
+      color: #14172F;
+      font-weight: 600;
+      font-size: 8.5pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    tr:nth-child(even) td {
+      background: #FBFBFE;
+    }
+
+    /* Code & Technical tags */
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 8.5pt;
+      background: #EEF0F8;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #3F51B5;
+    }
+
+    pre {
+      background: #0F1226;
+      color: #F3F4FF;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 8pt;
+      overflow-x: auto;
+      margin: 8px 0 12px 0;
+      line-height: 1.4;
+      page-break-inside: avoid;
+    }
+
+    /* Workflow Step Boxes */
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      page-break-inside: avoid;
+    }
+
+    .flow-number {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #3F51B5;
+      color: #FFFFFF;
+      font-weight: 700;
+      font-size: 9pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .flow-content {
+      flex: 1;
+      background: #FFFFFF;
+      border: 1px solid #E1E4F0;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .flow-content h4 {
+      font-size: 9.5pt;
+      color: #14172F;
+      margin-bottom: 4px;
+    }
+
+    .flow-content p {
+      font-size: 8.5pt;
+      margin-bottom: 0;
+      color: #5B6085;
+    }
+
+    .tag-pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 7.5pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      background: #E8EBFA;
+      color: #3F51B5;
+      margin-left: 6px;
+    }
+
+    .tag-post { background: #E6F4EA; color: #137333; }
+    .tag-get { background: #E8EBFA; color: #1A73E8; }
+    .tag-put { background: #FEF7E0; color: #B06000; }
+    .tag-delete { background: #FCE8E6; color: #C5221F; }
+
+    ul, ol {
+      margin-left: 20px;
+      margin-bottom: 10px;
+      font-size: 9.5pt;
+      color: #333854;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PAGE 1: COVER PAGE -->
+  <div class="page cover">
+    <div class="cover-top">
+      <span class="badge">Official Technical Specification</span>
+      <h1>Master DND</h1>
+      <p class="subtitle">Complete Architecture, Tech Stack, Workflow & API System Documentation</p>
+    </div>
+
+    <div>
+      <div class="card" style="background: #FFFFFF; border-left: 4px solid #3F51B5; margin-bottom: 24px;">
+        <h4 style="color: #3F51B5; margin-bottom: 6px;">Executive Abstract</h4>
+        <p style="font-size: 9pt; margin-bottom: 0;">
+          Master DND provides a unified mobile and cloud-synchronized control center that automates, profiles, and orchestrates how smartphones maintain silence. The system integrates Flutter client-side state management using BLoC pattern with a resilient Node.js, Express, and MongoDB Atlas cloud backend.
+        </p>
+      </div>
+
+      <div class="cover-meta">
+        <div class="meta-item">
+          <h4>Application ID / Package</h4>
+          <p>com.agree.masterdnd</p>
+        </div>
+        <div class="meta-item">
+          <h4>State Management</h4>
+          <p>BLoC Architecture (v8.1+)</p>
+        </div>
+        <div class="meta-item">
+          <h4>Cloud Database</h4>
+          <p>MongoDB Atlas Cluster</p>
+        </div>
+        <div class="meta-item">
+          <h4>Backend Server</h4>
+          <p>Node.js &bull; Express.js (Port 5001)</p>
+        </div>
+        <div class="meta-item">
+          <h4>Authentication</h4>
+          <p>Phone OTP &bull; JWT Bearer Tokens</p>
+        </div>
+        <div class="meta-item">
+          <h4>Date & Version</h4>
+          <p>November 2026 &bull; v1.0.0+1</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2: TECH STACK SPECIFICATION -->
+  <div class="page">
+    <h2>1. Comprehensive Tech Stack</h2>
+    <p>The Master DND platform is architected with a decoupled mobile-first architecture engineered for high availability, low latency, and deterministic offline resilience.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="margin-top:0;">Mobile Client (Frontend)</h3>
+        <ul>
+          <li><strong>Framework:</strong> Flutter 3.50.0 (Dart 3.14)</li>
+          <li><strong>Architecture:</strong> BLoC (Business Logic Component) via <code>flutter_bloc: ^8.1.6</code></li>
+          <li><strong>Object Equivalence:</strong> <code>equatable: ^2.1.0</code> for value equality in immutable state management</li>
+          <li><strong>Storage & Token Cache:</strong> <code>shared_preferences: ^2.5.6</code> for secure JWT session persistence</li>
+          <li><strong>Network Client:</strong> <code>http: ^1.6.0</code> with custom headers interceptor and base URI resolver</li>
+          <li><strong>Design System:</strong> Custom Tokenized Day/Night theme system mapped to Figma design specifications</li>
+          <li><strong>Targets:</strong> Android, iOS, macOS, Web</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0;">API Engine (Backend)</h3>
+        <ul>
+          <li><strong>Runtime Environment:</strong> Node.js (v24.x LTS)</li>
+          <li><strong>Framework:</strong> Express.js (v4.19) RESTful microservice</li>
+          <li><strong>ODM / Database Driver:</strong> Mongoose (v8.5)</li>
+          <li><strong>Session Security:</strong> JSON Web Tokens (<code>jsonwebtoken: ^9.0.2</code>) with HMAC-SHA256 signing</li>
+          <li><strong>HTTP Security:</strong> <code>helmet: ^7.1.0</code> header protection</li>
+          <li><strong>Cross-Origin:</strong> <code>cors: ^2.8.5</code> credentialed origins</li>
+          <li><strong>Protection:</strong> <code>express-rate-limit: ^7.3.1</code> prevents brute-force abuse on auth endpoints</li>
+          <li><strong>Logger:</strong> <code>morgan: ^1.10.0</code> HTTP request tracing</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Database & Cloud Infrastructure</h3>
+    <table style="margin-top: 6px;">
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Technology</th>
+          <th>Configuration / Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cloud Database</td>
+          <td>MongoDB Atlas Cluster</td>
+          <td>Shard replica set <code>demo.wdhfmep.mongodb.net</code>, DB: <code>master_dnd</code></td>
+        </tr>
+        <tr>
+          <td>Local Hybrid Fallback</td>
+          <td>In-Memory Dev Store</td>
+          <td>Zero-dependency development repository ensuring uninterrupted local testing when offline</td>
+        </tr>
+        <tr>
+          <td>TTL Auto-Purge</td>
+          <td>MongoDB <code>expires</code> Index</td>
+          <td>OTPs automatically expire and are purged by MongoDB after 300 seconds (5 mins)</td>
+        </tr>
+        <tr>
+          <td>Hosting Ports</td>
+          <td>HTTP / TLS</td>
+          <td>Port <code>5001</code> (avoids macOS AirPlay port 5000 conflicts)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Design System & Theming Engine</h3>
+    <div class="card">
+      <p style="margin-bottom: 6px;"><strong>ThemeExtension Token Mapping:</strong> Colors dynamically adapt based on theme mode. The Home screen automatically swaps between <code>dayTheme</code> and <code>nightTheme</code> whenever DND is armed.</p>
+      <div class="grid-3" style="font-size: 8.5pt;">
+        <div><strong>Canvas:</strong> Day <code>#F6F7FB</code> | Night <code>#0F1226</code></div>
+        <div><strong>Surface:</strong> Day <code>#FFFFFF</code> | Night <code>#1B1F3B</code></div>
+        <div><strong>Accent:</strong> Day <code>#3F51B5</code> | Night <code>#8C9EFF</code></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 3: APPLICATION WORKFLOW -->
+  <div class="page">
+    <h2>2. System Workflows & User Lifecycle</h2>
+    <p>The Master DND application follows a deterministic state machine orchestrated through <code>AuthBloc</code> and <code>DndBloc</code>.</p>
+
+    <h3>Authentication & Onboarding Workflow</h3>
+
+    <div class="flow-step">
+      <div class="flow-number">1</div>
+      <div class="flow-content">
+        <h4>Session Validation (AuthGate / Splash)</h4>
+        <p>The application loads and dispatches <code>AuthCheckRequested</code>. <code>AuthBloc</code> checks local storage for a cached JWT token. If present, it calls <code>GET /api/user/profile</code>. If valid and <code>isProfileComplete == true</code>, it immediately mounts the Dashboard. If no token, it routes to <code>PhoneLoginScreen</code>.</p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-number">2</div>
+      <div class="flow-content">
+        <h4>Phone Submission & OTP Generation</h4>
+        <p>User inputs their phone number with international country code. The client dispatches <code>AuthSendOtpRequested(phone)</code>. The backend validates format (E.164), generates a cryptographically secure 6-digit code, stores it in MongoDB with 5-minute TTL, logs it, and emits <code>AuthOtpSentState</code>.</p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-number">3</div>
+      <div class="flow-content">
+        <h4>Verification & Account Creation</h4>
+        <p>User enters the 6-digit code. The client dispatches <code>AuthVerifyOtpRequested(phone, otp)</code>. The server checks attempts (&le; 5), matches the code, and creates a new <code>User</code> record in MongoDB Atlas if first-time, seeding default DND profiles (Sleep, Work, Meeting, Driving, Study). A 30-day JWT token is issued.</p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-number">4</div>
+      <div class="flow-content">
+        <h4>Profile Setup (Step 2 Onboarding)</h4>
+        <p>If <code>user.isProfileComplete == false</code>, the client navigates to <code>ProfileFormScreen</code>. The user inputs their Name, Avatar, and Email. The client dispatches <code>AuthCompleteProfileRequested</code> which calls <code>PUT /api/user/profile</code>, sets <code>isProfileComplete: true</code>, and transitions to <code>AuthenticatedState</code>.</p>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-number">5</div>
+      <div class="flow-content">
+        <h4>Dashboard Operations & Edit Profile</h4>
+        <p>The user lands on the Dashboard (<code>AppShell</code>). The header greets the user by name with a time-of-day greeting (morning/afternoon/evening) and displays their avatar. Tapping the avatar opens <code>EditProfileScreen</code> with verified phone badge, profile editing, and logout.</p>
+      </div>
+    </div>
+
+    <h3>DND Power Arming & State Synchronization</h3>
+    <pre>
+[User Taps Power Button]
+        │
+        ▼
+[AuthBloc dispatches AuthToggleDndRequested(enabled)]
+        │
+        ├──> Optimistic UI Update: state = AuthenticatedState(user.copyWith(dndEnabled: true))
+        │    AppShell morphs to Night Theme (#0F1226) & "Armed" badge lights up
+        │
+        ▼
+[POST /api/dnd/toggle] ──> MongoDB updates user.dndEnabled: true
+        │
+     (Success) Keep active state / (Failure) Graceful revert to previous state
+    </pre>
+  </div>
+
+  <!-- PAGE 4: DATABASE SCHEMAS & API -->
+  <div class="page">
+    <h2>3. Database Models & Schema Design</h2>
+    <p>MongoDB Atlas stores all application state across four core Mongoose collections.</p>
+
+    <div class="grid-2">
+      <div class="card">
+        <h4 style="color:#3F51B5; margin-bottom:6px;">1. User Collection (<code>users</code>)</h4>
+        <p style="font-size:8pt; margin-bottom:6px;">Represents the primary user profile and system settings.</p>
+        <pre>
+{
+  "_id": ObjectId,
+  "phone": "+19876543210", // indexed, unique
+  "name": "Atulya Agrawal",
+  "email": "atulya@example.com",
+  "avatar": "A",
+  "bio": "Mobile Engineer",
+  "isProfileComplete": true,
+  "dndEnabled": false,
+  "emergencyContacts": [ ... ],
+  "notificationPreferences": {
+    "allowDndAccess": true,
+    "allowContacts": true,
+    "allowNotifications": true
+  },
+  "createdAt": ISODate,
+  "updatedAt": ISODate
+}
+        </pre>
+      </div>
+
+      <div class="card">
+        <h4 style="color:#3F51B5; margin-bottom:6px;">2. OTP Collection (<code>otps</code>)</h4>
+        <p style="font-size:8pt; margin-bottom:6px;">Temporary verification tokens with automated TTL purging.</p>
+        <pre>
+{
+  "_id": ObjectId,
+  "phone": "+19876543210", // indexed
+  "otp": "123456",
+  "expiresAt": ISODate,   // TTL index (5 mins)
+  "verified": false,
+  "attempts": 0,          // Max 5 attempts
+  "createdAt": ISODate
+}
+        </pre>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h4 style="color:#3F51B5; margin-bottom:6px;">3. DND Profile (<code>dndprofiles</code>)</h4>
+        <p style="font-size:8pt; margin-bottom:6px;">Pre-configured & custom silent mode profiles.</p>
+        <pre>
+{
+  "_id": ObjectId,
+  "userId": ObjectId,    // ref: User
+  "name": "Sleep",
+  "icon": "moon",
+  "meta": "Priority only, 10 PM - 6:30 AM",
+  "active": true,
+  "mode": "priorityOnly",
+  "autoReply": true,
+  "hideNotifications": false,
+  "callWhitelist": "Starred",
+  "messageWhitelist": "VIP only"
+}
+        </pre>
+      </div>
+
+      <div class="card">
+        <h4 style="color:#3F51B5; margin-bottom:6px;">4. DND Rule (<code>dndrules</code>)</h4>
+        <p style="font-size:8pt; margin-bottom:6px;">Automated trigger conditions for profiles.</p>
+        <pre>
+{
+  "_id": ObjectId,
+  "userId": ObjectId,    // ref: User
+  "title": "Sleep schedule",
+  "subtitle": "Starts 10:00 PM, every night",
+  "triggerType": "schedule", // calendar, driving
+  "active": true
+}
+        </pre>
+      </div>
+    </div>
+
+    <h2>4. REST API Specification</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Endpoint</th>
+          <th>Auth Required</th>
+          <th>Description & Payload</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag-pill tag-post">POST</span></td>
+          <td><code>/api/auth/send-otp</code></td>
+          <td>No</td>
+          <td>Request 6-digit OTP code. Body: <code>{ "phone": "+19876543210" }</code></td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-post">POST</span></td>
+          <td><code>/api/auth/verify-otp</code></td>
+          <td>No</td>
+          <td>Validates OTP, creates account, returns 30-day JWT Bearer token</td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-get">GET</span></td>
+          <td><code>/api/user/profile</code></td>
+          <td>Bearer Token</td>
+          <td>Returns authenticated user profile, phone, avatar, and DND status</td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-put">PUT</span></td>
+          <td><code>/api/user/profile</code></td>
+          <td>Bearer Token</td>
+          <td>Updates name, email, avatar, bio; sets <code>isProfileComplete: true</code></td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-get">GET</span></td>
+          <td><code>/api/dnd/profiles</code></td>
+          <td>Bearer Token</td>
+          <td>Fetches list of all DND profiles belonging to the authenticated user</td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-put">PUT</span></td>
+          <td><code>/api/dnd/profiles/:id</code></td>
+          <td>Bearer Token</td>
+          <td>Updates profile configuration or switches active status</td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-post">POST</span></td>
+          <td><code>/api/dnd/toggle</code></td>
+          <td>Bearer Token</td>
+          <td>Toggles the master DND power state (armed vs disarmed)</td>
+        </tr>
+        <tr>
+          <td><span class="tag-pill tag-get">GET</span></td>
+          <td><code>/api/dnd/insights</code></td>
+          <td>Bearer Token</td>
+          <td>Returns silenced count, let through count, and weekly metrics</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PAGE 5: PROJECT STRUCTURE & SETUP GUIDE -->
+  <div class="page">
+    <h2>5. Project Directory Structure</h2>
+    <pre>
+master_dnd/
+├── backend/                       # Node.js + Express.js + MongoDB API Service
+│   ├── src/
+│   │   ├── config/db.js           # Mongoose Atlas connection & dev fallback store
+│   │   ├── controllers/           # authController, userController, dndController
+│   │   ├── middleware/            # authMiddleware (JWT verify) & errorHandler
+│   │   ├── models/                # User.js, Otp.js, DndProfile.js, DndRule.js
+│   │   ├── routes/                # authRoutes.js, userRoutes.js, dndRoutes.js
+│   │   └── utils/                 # token.js (JWT), otpHelper.js, devStore.js
+│   ├── .env                       # Environment configuration with MongoDB URI
+│   ├── server.js                  # Service entry point (Port 5001)
+│   └── package.json               # Backend dependencies
+│
+├── lib/                           # Flutter Client
+│   ├── bloc/                      # Business Logic Component Layer
+│   │   ├── auth/                  # auth_bloc.dart, auth_event.dart, auth_state.dart
+│   │   └── dnd/                   # dnd_bloc.dart, dnd_event.dart, dnd_state.dart
+│   ├── core/
+│   │   ├── api_service.dart       # HTTP client with persistent Bearer headers
+│   │   ├── models.dart            # UserModel, DndProfile, DndRule, DndIcons
+│   │   ├── theme.dart             # dayTheme and nightTheme definitions
+│   │   └── tokens.dart            # DndColors, Radii, Space, context extensions
+│   ├── screens/
+│   │   ├── splash_screen.dart     # AuthGate session router
+│   │   ├── auth/                  # phone_login_screen.dart, otp_verification_screen.dart, profile_form_screen.dart
+│   │   ├── profile/               # edit_profile_screen.dart
+│   │   ├── app_shell.dart         # BottomNavigationBar shell with reactive night theme
+│   │   ├── home_screen.dart       # Dashboard, dynamic header, power switch
+│   │   ├── profiles_screen.dart   # DND profiles manager
+│   │   └── profile_editor_screen.dart # Profile parameters editor
+│   ├── widgets/widgets.dart       # Reusable Design System components
+│   └── main.dart                  # MultiBlocProvider & MaterialApp
+├── pubspec.yaml                   # Flutter dependencies (flutter_bloc, equatable, http, shared_preferences)
+└── README.md
+    </pre>
+
+    <h2>6. Production Setup & Execution Instructions</h2>
+    <div class="card">
+      <h4 style="color:#3F51B5; margin-bottom:6px;">Step 1: Backend API Service</h4>
+      <pre>
+cd backend
+npm install
+npm run dev # or npm start
+# Server listens on http://localhost:5001
+# Verified connection: ac-zrykjrb-shard-00-00.wdhfmep.mongodb.net/master_dnd
+      </pre>
+    </div>
+
+    <div class="card">
+      <h4 style="color:#3F51B5; margin-bottom:6px;">Step 2: Flutter Mobile Application</h4>
+      <pre>
+# Ensure Flutter SDK 3.50+ / Dart 3.14+ is configured
+flutter pub get
+
+# Static analysis verification (0 issues, 0 warnings)
+flutter analyze
+
+# Run on macOS / iOS Simulator / Android Emulator / Chrome
+flutter run
+      </pre>
+    </div>
+
+    <h2>7. Security & Best Practices</h2>
+    <ul>
+      <li><strong>E.164 Phone Formatting:</strong> Numbers are sanitized and validated to avoid duplicates across country formats.</li>
+      <li><strong>Lockout Protection:</strong> OTP verification is locked after 5 failed attempts per window to prevent brute-forcing.</li>
+      <li><strong>Atomic Token Refresh:</strong> Session tokens carry 30-day expirations and are invalidated immediately upon logout.</li>
+      <li><strong>Platform Isolation:</strong> Package namespace is standardized to <code>com.agree.masterdnd</code> across Android Gradle, Kotlin manifests, iOS PBX projects, and macOS AppInfo bundles.</li>
+    </ul>
+  </div>
+
+</body>
+</html>
