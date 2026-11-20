@@ -41,6 +41,12 @@ const sendOtpEmail = async (toEmail, otpCode) => {
       from: fromAddress,
       to: toEmail,
       subject: `Your Master DND Verification Code: ${otpCode}`,
+      priority: 'high',
+      headers: {
+        'X-Priority': '1 (Highest)',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'High',
+      },
       text: `Your Master DND verification code is ${otpCode}. It expires in 5 minutes.`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #E1E4F0; border-radius: 16px; background: #FFFFFF;">
