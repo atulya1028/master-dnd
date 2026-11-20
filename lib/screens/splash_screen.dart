@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -20,12 +21,32 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  Timer? _safetyTimer;
+
   @override
   void initState() {
     super.initState();
-    if (context.read<AuthBloc>().state is AuthInitial) {
-      context.read<AuthBloc>().add(const AuthCheckRequested());
+    try {
+      if (context.read<AuthBloc>().state is AuthInitial) {
+        context.read<AuthBloc>().add(const AuthCheckRequested());
+      }
+      // Safety guard: if session check takes longer than 4 seconds,
+      // fallback to PhoneLoginScreen automatically so the user is never stuck on splash.
+      _safetyTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted && context.read<AuthBloc>().state is AuthInitial) {
+          debugPrint('[AuthGate] Session check timed out after 4s; showing login screen.');
+          context.read<AuthBloc>().add(const AuthLogoutRequested());
+        }
+      });
+    } catch (e, stack) {
+      debugPrint('[AuthGate.initState] Error: $e\n$stack');
     }
+  }
+
+  @override
+  void dispose() {
+    _safetyTimer?.cancel();
+    super.dispose();
   }
 
   @override

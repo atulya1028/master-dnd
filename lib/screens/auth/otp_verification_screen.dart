@@ -63,22 +63,33 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   void _handleVerify() {
-    final code = _otpController.text.trim();
-    if (code.length < 6) {
-      setState(() => _localError = 'Please enter the complete 6-digit code.');
-      return;
-    }
+    try {
+      final code = _otpController.text.trim();
+      if (code.length < 6) {
+        setState(() => _localError = 'Please enter the complete 6-digit code.');
+        return;
+      }
 
-    setState(() => _localError = null);
-    context.read<AuthBloc>().add(AuthVerifyOtpRequested(
-          phone: widget.phone,
-          otp: code,
-        ));
+      setState(() => _localError = null);
+      context.read<AuthBloc>().add(AuthVerifyOtpRequested(
+            phone: widget.phone,
+            otp: code,
+          ));
+    } catch (e, stack) {
+      debugPrint('[OtpVerificationScreen._handleVerify] Error: $e\n$stack');
+      setState(() => _localError = 'Error: ${e.toString().replaceAll('Exception: ', '')}');
+    }
   }
 
   void _handleResend() {
-    if (_secondsRemaining > 0) return;
-    context.read<AuthBloc>().add(AuthResendOtpRequested(widget.phone));
+    try {
+      if (_secondsRemaining > 0) return;
+      setState(() => _localError = null);
+      context.read<AuthBloc>().add(AuthResendOtpRequested(widget.phone));
+    } catch (e, stack) {
+      debugPrint('[OtpVerificationScreen._handleResend] Error: $e\n$stack');
+      setState(() => _localError = 'Resend error: ${e.toString().replaceAll('Exception: ', '')}');
+    }
   }
 
   @override
@@ -96,14 +107,20 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           setState(() {
             _currentTestOtp = state.testOtp;
             if (state.testOtp != null) _otpController.text = state.testOtp!;
+            _localError = null;
           });
           _startCountdown();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('A new verification code has been sent.')),
           );
         } else if (state is AuthFailureState) {
+          setState(() => _localError = state.error);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.error), backgroundColor: c.critical),
+            SnackBar(
+              content: Text(state.error),
+              backgroundColor: c.critical,
+              duration: const Duration(seconds: 4),
+            ),
           );
         }
       },

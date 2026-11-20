@@ -65,54 +65,81 @@ class ApiService {
 
   String _formatNetworkError(dynamic e) {
     if (e is TimeoutException) {
-      return 'Server response timed out. Make sure the backend server is running at $baseUrl.';
+      return 'Request timed out after ${_requestTimeout.inSeconds}s. Please verify the backend is running at $baseUrl.';
     }
     if (e is SocketException) {
-      return 'Cannot reach backend at $baseUrl. Ensure "npm run dev" is running.';
+      return 'Cannot reach backend at $baseUrl. Ensure backend server is running on port 5001.';
     }
-    return e.toString().replaceAll('Exception: ', '');
+    final raw = e.toString().replaceAll('Exception: ', '');
+    if (raw.contains('XMLHttpRequest') || raw.contains('ClientException')) {
+      return 'Connection error: Unable to reach backend at $baseUrl. Ensure port 5001 is accessible.';
+    }
+    return raw;
+  }
+
+  Map<String, dynamic> _safeDecodeJson(String body, int statusCode) {
+    if (body.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      return {'data': decoded};
+    } catch (e) {
+      debugPrint('[ApiService] JSON decode warning: $e for status $statusCode. Body snippet: ${body.length > 200 ? body.substring(0, 200) : body}');
+      return {};
+    }
   }
 
   // -------------------------------------------------------------
   // AUTHENTICATION
   // -------------------------------------------------------------
 
-  /// Request OTP for a phone number
-  Future<Map<String, dynamic>> sendOtp(String phone) async {
+  /// Request OTP for an email address
+  Future<Map<String, dynamic>> sendOtp(String email) async {
     final uri = Uri.parse('$baseUrl/auth/send-otp');
     try {
+      debugPrint('[ApiService.sendOtp] POST $uri for $email');
       final res = await http
           .post(
             uri,
             headers: _headers(),
-            body: jsonEncode({'email': phone, 'identifier': phone, 'phone': phone}),
+            body: jsonEncode({'email': email, 'identifier': email, 'phone': email}),
           )
           .timeout(_requestTimeout);
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      debugPrint('[ApiService.sendOtp] Status: ${res.statusCode}');
+      final data = _safeDecodeJson(res.body, res.statusCode);
+
       if (res.statusCode >= 200 && res.statusCode < 300) {
         return data;
       }
-      throw Exception(data['message'] ?? 'Failed to send OTP (Status: ${res.statusCode})');
-    } catch (e) {
-      debugPrint('[ApiService.sendOtp] Error: $e');
+      final msg = data['message']?.toString() ??
+          data['error']?.toString() ??
+          'Failed to send OTP (Status: ${res.statusCode})';
+      throw Exception(msg);
+    } catch (e, stack) {
+      debugPrint('[ApiService.sendOtp] Error: $e\n$stack');
       throw Exception(_formatNetworkError(e));
     }
   }
 
   /// Verify OTP code and retrieve JWT session token
-  Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
+  Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
     final uri = Uri.parse('$baseUrl/auth/verify-otp');
     try {
+      debugPrint('[ApiService.verifyOtp] POST $uri for $email');
       final res = await http
           .post(
             uri,
             headers: _headers(),
-            body: jsonEncode({'email': phone, 'identifier': phone, 'phone': phone, 'otp': otp}),
+            body: jsonEncode({'email': email, 'identifier': email, 'phone': email, 'otp': otp}),
           )
           .timeout(_requestTimeout);
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      debugPrint('[ApiService.verifyOtp] Status: ${res.statusCode}');
+      final data = _safeDecodeJson(res.body, res.statusCode);
+
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final token = data['token']?.toString();
         if (token != null) {
@@ -120,9 +147,12 @@ class ApiService {
         }
         return data;
       }
-      throw Exception(data['message'] ?? 'Failed to verify OTP code');
-    } catch (e) {
-      debugPrint('[ApiService.verifyOtp] Error: $e');
+      final msg = data['message']?.toString() ??
+          data['error']?.toString() ??
+          'Failed to verify OTP code (Status: ${res.statusCode})';
+      throw Exception(msg);
+    } catch (e, stack) {
+      debugPrint('[ApiService.verifyOtp] Error: $e\n$stack');
       throw Exception(_formatNetworkError(e));
     }
   }
@@ -141,12 +171,13 @@ class ApiService {
           .get(uri, headers: _headers(token))
           .timeout(_requestTimeout);
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = _safeDecodeJson(res.body, res.statusCode);
       if (res.statusCode == 200 && data['user'] != null) {
         return UserModel.fromJson(data['user'] as Map<String, dynamic>);
       }
-      throw Exception(data['message'] ?? 'Failed to fetch user profile');
-    } catch (e) {
+      throw Exception(data['message'] ?? 'Failed to fetch user profile (Status: ${res.statusCode})');
+    } catch (e, stack) {
+      debugPrint('[ApiService.getProfile] Error: $e\n$stack');
       throw Exception(_formatNetworkError(e));
     }
   }

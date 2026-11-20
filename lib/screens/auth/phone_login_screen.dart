@@ -27,19 +27,24 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   }
 
   void _handleSendOtp() {
-    setState(() => _localError = null);
+    try {
+      setState(() => _localError = null);
 
-    final email = _emailController.text.trim().toLowerCase();
-    if (email.isEmpty) {
-      setState(() => _localError = 'Please enter your email address.');
-      return;
-    }
-    if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
-      setState(() => _localError = 'Please enter a valid email address (e.g. name@example.com).');
-      return;
-    }
+      final email = _emailController.text.trim().toLowerCase();
+      if (email.isEmpty) {
+        setState(() => _localError = 'Please enter your email address.');
+        return;
+      }
+      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
+        setState(() => _localError = 'Please enter a valid email address (e.g. name@example.com).');
+        return;
+      }
 
-    context.read<AuthBloc>().add(AuthSendOtpRequested(email));
+      context.read<AuthBloc>().add(AuthSendOtpRequested(email));
+    } catch (e, stack) {
+      debugPrint('[PhoneLoginScreen._handleSendOtp] UI exception: $e\n$stack');
+      setState(() => _localError = 'Unexpected error: ${e.toString().replaceAll('Exception: ', '')}');
+    }
   }
 
   @override
@@ -49,6 +54,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
     return BlocConsumer<AuthBloc, AuthBlocState>(
       listener: (context, state) {
         if (state is AuthOtpSentState) {
+          setState(() => _localError = null);
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => OtpVerificationScreen(
@@ -58,10 +64,17 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
             ),
           );
         } else if (state is AuthFailureState) {
+          setState(() => _localError = state.error);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(state.error),
               backgroundColor: c.critical,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Retry',
+                textColor: Colors.white,
+                onPressed: _handleSendOtp,
+              ),
             ),
           );
         }

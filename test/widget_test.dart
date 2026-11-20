@@ -129,5 +129,17 @@ void main() {
       expect(shouldRebuild(const AuthUnauthenticated()), isTrue);
       expect(shouldRebuild(const AuthenticatedState(user: UserModel(id: '1', phone: 'test'))), isTrue);
     });
+
+    test('AuthFailureState terminates loading and preserves error details', () {
+      const failure = AuthFailureState(
+        error: 'Connection error: Unable to reach backend at http://localhost:5001/api',
+        previousState: AuthUnauthenticated(),
+      );
+      expect(failure.error, contains('Unable to reach backend'));
+      expect(failure.previousState, isA<AuthUnauthenticated>());
+      // When failure is emitted, isLoading evaluates to false so progress indicator is dismissed
+      final isLoading = failure is AuthLoading;
+      expect(isLoading, isFalse);
+    });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/api_service.dart';
@@ -45,8 +47,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
       } else {
         emit(AuthenticatedState(user: profile));
       }
-    } catch (_) {
-      await _api.clearSession();
+    } catch (e, stack) {
+      debugPrint('[AuthBloc._onCheckRequested] Session check error: $e\n$stack');
+      try {
+        await _api.clearSession();
+      } catch (_) {}
       emit(const AuthUnauthenticated());
     }
   }
@@ -58,13 +63,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
     final previous = state;
     emit(const AuthLoading(message: 'Sending verification code...'));
     try {
-      final res = await _api.sendOtp(event.phone);
+      final res = await _api.sendOtp(event.phone).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Request timed out while connecting to the backend.'),
+      );
       emit(AuthOtpSentState(
         phone: event.phone,
         testOtp: res['testOtp']?.toString(),
         expiresInSeconds: (res['expiresInSeconds'] as num?)?.toInt() ?? 300,
       ));
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[AuthBloc._onSendOtpRequested] Error: $e\n$stack');
       emit(AuthFailureState(
         error: e.toString().replaceAll('Exception: ', ''),
         previousState: previous,
@@ -79,7 +88,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
     final previous = state;
     emit(const AuthLoading(message: 'Verifying code...'));
     try {
-      final res = await _api.verifyOtp(event.phone, event.otp);
+      final res = await _api.verifyOtp(event.phone, event.otp).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Verification timed out. Please try again.'),
+      );
       final isProfileComplete = res['isProfileComplete'] == true;
       final userMap = res['user'] as Map<String, dynamic>? ?? {};
       final user = UserModel.fromJson(userMap);
@@ -89,7 +101,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
       } else {
         emit(AuthenticatedState(user: user));
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[AuthBloc._onVerifyOtpRequested] Error: $e\n$stack');
       emit(AuthFailureState(
         error: e.toString().replaceAll('Exception: ', ''),
         previousState: previous,
@@ -101,16 +114,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
     AuthResendOtpRequested event,
     Emitter<AuthBlocState> emit,
   ) async {
+    final previous = state;
+    emit(const AuthLoading(message: 'Resending verification code...'));
     try {
-      final res = await _api.sendOtp(event.phone);
+      final res = await _api.sendOtp(event.phone).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Resend timed out. Please try again.'),
+      );
       emit(AuthOtpSentState(
         phone: event.phone,
         testOtp: res['testOtp']?.toString(),
       ));
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[AuthBloc._onResendOtpRequested] Error: $e\n$stack');
       emit(AuthFailureState(
         error: e.toString().replaceAll('Exception: ', ''),
-        previousState: state,
+        previousState: previous,
       ));
     }
   }
