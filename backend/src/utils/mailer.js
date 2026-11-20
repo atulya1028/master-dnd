@@ -37,13 +37,10 @@ const sendOtpEmail = async (toEmail, otpCode) => {
 
   try {
     const fromAddress = process.env.SMTP_FROM || `"Master DND" <${process.env.SMTP_USER}>`;
-    const senderUser = (process.env.SMTP_USER || '').trim();
 
     const info = await transporter.sendMail({
       from: fromAddress,
       to: toEmail,
-      // Also send a copy to the sender inbox so you can monitor all OTPs in Zoho Mail
-      bcc: senderUser && toEmail.toLowerCase() !== senderUser.toLowerCase() ? senderUser : undefined,
       subject: `Your Master DND Verification Code: ${otpCode}`,
       priority: 'high',
       headers: {
