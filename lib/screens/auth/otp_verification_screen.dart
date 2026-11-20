@@ -131,9 +131,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     alignment: Alignment.centerLeft,
                   ),
                   const SizedBox(height: Space.s16),
-                  Text('Verify Phone Number', style: context.text.displayLarge),
+                  Text('Verify Email Address', style: context.text.displayLarge),
                   const SizedBox(height: Space.s8),
-                  Row(
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         'Code sent to ',
@@ -141,9 +142,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                       Text(
                         widget.phone,
-                        style: context.text.labelLarge!.copyWith(color: c.accent),
+                        style: context.text.labelLarge!.copyWith(color: c.accent, fontWeight: FontWeight.bold),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: Space.s4),
+                  Text(
+                    'Check your inbox or spam folder.',
+                    style: context.text.bodySmall!.copyWith(color: c.textSecondary),
                   ),
                   const SizedBox(height: Space.s32),
 

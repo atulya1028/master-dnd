@@ -2,20 +2,11 @@ const User = require('../models/User');
 const Otp = require('../models/Otp');
 const DndProfile = require('../models/DndProfile');
 const DndRule = require('../models/DndRule');
-const { generateOtp, sendSmsOtp } = require('../utils/otpHelper');
+const { generateOtp } = require('../utils/otpHelper');
 const { sendOtpEmail } = require('../utils/mailer');
 const { generateToken } = require('../utils/token');
 const { getIsConnected } = require('../config/db');
 const devStore = require('../utils/devStore');
-
-/**
- * Normalizes phone numbers to standard format (digits only or leading +)
- */
-const normalizePhone = (phone) => {
-  if (!phone) return '';
-  const clean = phone.replace(/[^\d+]/g, '');
-  return clean.startsWith('+') ? clean : `+${clean}`;
-};
 
 /**
  * Validates email format
@@ -26,43 +17,20 @@ const isValidEmail = (email) => {
 
 /**
  * POST /api/auth/send-otp
- * Supports both Phone numbers (+1234567890) and Email addresses (user@example.com)
+ * Dedicated Email OTP handler
  */
 const sendOtpHandler = async (req, res) => {
   try {
-    const rawTarget = req.body.email || req.body.phone || req.body.identifier;
+    const rawTarget = req.body.email || req.body.identifier || req.body.phone;
 
-    if (!rawTarget || typeof rawTarget !== 'string') {
+    if (!rawTarget || typeof rawTarget !== 'string' || !isValidEmail(rawTarget)) {
       return res.status(400).json({
         success: false,
-        message: 'A valid phone number or email address is required.',
+        message: 'Please provide a valid email address (e.g. name@example.com).',
       });
     }
 
-    const isEmail = rawTarget.includes('@');
-    let identifier = '';
-    let channel = 'sms';
-
-    if (isEmail) {
-      if (!isValidEmail(rawTarget)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please provide a valid email address (e.g. name@example.com).',
-        });
-      }
-      identifier = rawTarget.trim().toLowerCase();
-      channel = 'email';
-    } else {
-      const phone = normalizePhone(rawTarget);
-      if (phone.length < 8 || phone.length > 16) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please provide a valid phone number (e.g. +1234567890).',
-        });
-      }
-      identifier = phone;
-      channel = 'sms';
-    }
+    const identifier = rawTarget.trim().toLowerCase();
 
     const isProduction = process.env.NODE_ENV === 'production';
     // In production, ALWAYS enforce real OTP and never allow fixed dev OTP or expose testOtp.
@@ -76,8 +44,7 @@ const sendOtpHandler = async (req, res) => {
       await Otp.deleteMany({ identifier });
       await Otp.create({
         identifier,
-        phone: !isEmail ? identifier : undefined,
-        email: isEmail ? identifier : undefined,
+        email: identifier,
         otp: otpCode,
         expiresAt,
         verified: false,
@@ -86,8 +53,7 @@ const sendOtpHandler = async (req, res) => {
     } else {
       devStore.otps.set(identifier, {
         identifier,
-        phone: !isEmail ? identifier : undefined,
-        email: isEmail ? identifier : undefined,
+        email: identifier,
         otp: otpCode,
         expiresAt,
         verified: false,
@@ -95,21 +61,15 @@ const sendOtpHandler = async (req, res) => {
       });
     }
 
-    // Delivery dispatch
-    let deliveryResult = { success: true };
-    if (channel === 'email') {
-      deliveryResult = await sendOtpEmail(identifier, otpCode);
-    } else {
-      deliveryResult = await sendSmsOtp(identifier, otpCode);
-    }
+    // Deliver real email via SMTP
+    const deliveryResult = await sendOtpEmail(identifier, otpCode);
 
     return res.status(200).json({
       success: true,
       message: `OTP sent successfully to ${identifier}.`,
       identifier,
-      phone: !isEmail ? identifier : undefined,
-      email: isEmail ? identifier : undefined,
-      channel,
+      email: identifier,
+      channel: 'email',
       expiresInSeconds: 300,
       delivered: deliveryResult.delivered ?? true,
       // Only include testOtp in development mode when real OTP is explicitly disabled
@@ -127,27 +87,27 @@ const sendOtpHandler = async (req, res) => {
 
 /**
  * POST /api/auth/verify-otp
+ * Dedicated Email OTP verification
  */
 const verifyOtpHandler = async (req, res) => {
   try {
-    const rawTarget = req.body.email || req.body.phone || req.body.identifier;
+    const rawTarget = req.body.email || req.body.identifier || req.body.phone;
     const { otp } = req.body;
 
     if (!rawTarget || !otp) {
       return res.status(400).json({
         success: false,
-        message: 'Phone number or email address, and OTP code are required.',
+        message: 'A valid email address and 6-digit OTP code are required.',
       });
     }
 
-    const isEmail = rawTarget.includes('@');
-    const identifier = isEmail ? rawTarget.trim().toLowerCase() : normalizePhone(rawTarget);
+    const identifier = rawTarget.trim().toLowerCase();
     const trimmedOtp = otp.toString().trim();
 
     let record = null;
     if (getIsConnected()) {
       record = await Otp.findOne({
-        $or: [{ identifier }, { phone: identifier }, { email: identifier }],
+        $or: [{ identifier }, { email: identifier }],
       }).sort({ createdAt: -1 });
     } else {
       record = devStore.otps.get(identifier);
@@ -199,21 +159,19 @@ const verifyOtpHandler = async (req, res) => {
       await record.save();
     }
 
-    // Find or create User
+    // Find or create User by email
     let user = null;
     let isNewUser = false;
 
     if (getIsConnected()) {
-      user = await User.findOne({
-        $or: isEmail ? [{ email: identifier }] : [{ phone: identifier }],
-      });
+      user = await User.findOne({ email: identifier });
 
       if (!user) {
         user = await User.create({
-          phone: isEmail ? '' : identifier,
-          email: isEmail ? identifier : '',
+          phone: '',
+          email: identifier,
           name: '',
-          avatar: 'A',
+          avatar: identifier.charAt(0).toUpperCase() || 'A',
           isProfileComplete: false,
           dndEnabled: false,
         });
@@ -236,7 +194,7 @@ const verifyOtpHandler = async (req, res) => {
     } else {
       // In-memory fallback
       for (const u of devStore.users.values()) {
-        if ((isEmail && u.email === identifier) || (!isEmail && u.phone === identifier)) {
+        if (u.email === identifier) {
           user = u;
           break;
         }
@@ -245,25 +203,22 @@ const verifyOtpHandler = async (req, res) => {
       if (!user) {
         const id = devStore.genId();
         user = {
+          id,
           _id: id,
-          phone: isEmail ? '' : identifier,
-          email: isEmail ? identifier : '',
+          phone: '',
+          email: identifier,
           name: '',
-          avatar: 'A',
+          avatar: identifier.charAt(0).toUpperCase() || 'A',
           isProfileComplete: false,
           dndEnabled: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
         };
-        devStore.users.set(id, user);
+        devStore.users.set(identifier, user);
         isNewUser = true;
 
-        // Seed default profiles
         const defP = devStore.getDefaultProfiles(id);
         for (const p of defP) {
           devStore.profiles.set(p._id, p);
         }
-        // Seed default rules
         const defR = devStore.getDefaultRules(id);
         for (const r of defR) {
           devStore.rules.set(r._id, r);
@@ -273,7 +228,6 @@ const verifyOtpHandler = async (req, res) => {
 
     const token = generateToken({
       userId: user._id.toString(),
-      phone: user.phone,
       email: user.email,
     });
 
@@ -285,7 +239,6 @@ const verifyOtpHandler = async (req, res) => {
       isProfileComplete: Boolean(user.isProfileComplete),
       user: {
         id: user._id,
-        phone: user.phone,
         email: user.email,
         name: user.name,
         avatar: user.avatar,
