@@ -17,8 +17,12 @@ class ApiService {
   static const _userKey = 'master_dnd_cached_user';
   static const Duration _requestTimeout = Duration(seconds: 10);
 
-  /// Determines appropriate local host for Android emulator vs iOS/macOS/web
+  /// Determines appropriate local host for Android emulator vs iOS/macOS/web,
+  /// or loads a production URL passed via --dart-define=API_URL=https://...
   static String get defaultBaseUrl {
+    const envUrl = String.fromEnvironment('API_URL');
+    if (envUrl.isNotEmpty) return envUrl;
+
     if (kIsWeb) return 'http://127.0.0.1:5001/api';
     try {
       if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';
