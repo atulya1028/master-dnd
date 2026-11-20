@@ -64,9 +64,9 @@ const sendOtpHandler = async (req, res) => {
       channel = 'sms';
     }
 
-    // Default development test OTP: 123456 or dynamically generated 6-digit code
-    const isDev = process.env.NODE_ENV !== 'production';
-    const otpCode = isDev && process.env.FIXED_DEV_OTP ? process.env.FIXED_DEV_OTP : generateOtp();
+    // Real OTP mode: generates real random 6-digit OTP code
+    const useRealOtp = process.env.REAL_OTP === 'true' || !process.env.FIXED_DEV_OTP;
+    const otpCode = useRealOtp ? generateOtp() : process.env.FIXED_DEV_OTP;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     if (getIsConnected()) {
@@ -110,8 +110,8 @@ const sendOtpHandler = async (req, res) => {
       channel,
       expiresInSeconds: 300,
       delivered: deliveryResult.delivered ?? true,
-      // For effortless dev/testing:
-      testOtp: isDev ? otpCode : undefined,
+      // Only include testOtp when not using real OTP delivery
+      testOtp: useRealOtp ? undefined : otpCode,
     });
   } catch (error) {
     console.error('[sendOtpHandler] Error:', error);
