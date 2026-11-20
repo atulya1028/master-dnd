@@ -9,31 +9,74 @@ import 'models.dart';
 
 class ApiService {
   ApiService._() {
-    baseUrl = defaultBaseUrl;
+    baseUrl = candidateBaseUrls.first;
   }
   static final ApiService instance = ApiService._();
 
   static const _tokenKey = 'master_dnd_auth_token';
   static const _userKey = 'master_dnd_cached_user';
-  static const Duration _requestTimeout = Duration(seconds: 25);
+  static const Duration _requestTimeout = Duration(seconds: 15);
 
-  /// Determines appropriate local host for Android emulator vs iOS/macOS/web,
-  /// or loads a production URL passed via --dart-define=API_URL=https://...
-  static String get defaultBaseUrl {
+  /// Local development Mac LAN IP to support physical Android/iOS devices on the same Wi-Fi
+  static const String _lanHost = '192.168.31.29:5001';
+
+  static List<String> get candidateBaseUrls {
     const envUrl = String.fromEnvironment('API_URL');
-    if (envUrl.isNotEmpty) return envUrl;
+    if (envUrl.isNotEmpty) return [envUrl];
 
     if (kIsWeb) {
       final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-      return 'http://$host:5001/api';
+      return ['http://$host:5001/api'];
     }
     try {
-      if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';
+      if (Platform.isAndroid) {
+        return [
+          'http://$_lanHost/api',       // Physical Android phone over local Wi-Fi
+          'http://10.0.2.2:5001/api',   // Android Emulator
+          'http://127.0.0.1:5001/api',  // adb reverse
+          'http://localhost:5001/api',
+        ];
+      }
     } catch (_) {}
-    return 'http://localhost:5001/api';
+    return [
+      'http://localhost:5001/api',
+      'http://$_lanHost/api',
+    ];
   }
 
+  static String get defaultBaseUrl => candidateBaseUrls.first;
+
   late String baseUrl;
+  String? _verifiedBaseUrl;
+
+  Future<String> resolveBaseUrl() async {
+    if (_verifiedBaseUrl != null) return _verifiedBaseUrl!;
+
+    final candidates = candidateBaseUrls;
+    if (candidates.length <= 1) {
+      _verifiedBaseUrl = candidates.first;
+      baseUrl = candidates.first;
+      return _verifiedBaseUrl!;
+    }
+
+    // Fast discovery: check which candidate is active
+    for (final candidate in candidates) {
+      try {
+        final probeUri = Uri.parse(candidate.replaceAll('/api', '/api/health'));
+        final res = await http.get(probeUri).timeout(const Duration(milliseconds: 1500));
+        if (res.statusCode == 200) {
+          debugPrint('[ApiService] Auto-detected backend endpoint: $candidate');
+          _verifiedBaseUrl = candidate;
+          baseUrl = candidate;
+          return candidate;
+        }
+      } catch (_) {}
+    }
+
+    _verifiedBaseUrl = candidates.first;
+    baseUrl = candidates.first;
+    return _verifiedBaseUrl!;
+  }
 
   String? _cachedToken;
 
@@ -97,7 +140,8 @@ class ApiService {
 
   /// Request OTP for an email address
   Future<Map<String, dynamic>> sendOtp(String email) async {
-    final uri = Uri.parse('$baseUrl/auth/send-otp');
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/auth/send-otp');
     try {
       debugPrint('[ApiService.sendOtp] POST $uri for $email');
       final res = await http
@@ -119,6 +163,7 @@ class ApiService {
           'Failed to send OTP (Status: ${res.statusCode})';
       throw Exception(msg);
     } catch (e, stack) {
+      _verifiedBaseUrl = null; // Re-probe on connection failure
       debugPrint('[ApiService.sendOtp] Error: $e\n$stack');
       throw Exception(_formatNetworkError(e));
     }
@@ -126,7 +171,8 @@ class ApiService {
 
   /// Verify OTP code and retrieve JWT session token
   Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
-    final uri = Uri.parse('$baseUrl/auth/verify-otp');
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/auth/verify-otp');
     try {
       debugPrint('[ApiService.verifyOtp] POST $uri for $email');
       final res = await http
@@ -152,6 +198,7 @@ class ApiService {
           'Failed to verify OTP code (Status: ${res.statusCode})';
       throw Exception(msg);
     } catch (e, stack) {
+      _verifiedBaseUrl = null;
       debugPrint('[ApiService.verifyOtp] Error: $e\n$stack');
       throw Exception(_formatNetworkError(e));
     }
@@ -165,7 +212,8 @@ class ApiService {
     final token = await getToken();
     if (token == null) throw Exception('No session token');
 
-    final uri = Uri.parse('$baseUrl/user/profile');
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/user/profile');
     try {
       final res = await http
           .get(uri, headers: _headers(token))
@@ -177,6 +225,7 @@ class ApiService {
       }
       throw Exception(data['message'] ?? 'Failed to fetch user profile (Status: ${res.statusCode})');
     } catch (e, stack) {
+      _verifiedBaseUrl = null;
       debugPrint('[ApiService.getProfile] Error: $e\n$stack');
       throw Exception(_formatNetworkError(e));
     }
@@ -191,7 +240,8 @@ class ApiService {
     final token = await getToken();
     if (token == null) throw Exception('No session token');
 
-    final uri = Uri.parse('$baseUrl/user/profile');
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/user/profile');
     final Map<String, dynamic> body = {};
     if (name != null) body['name'] = name;
     if (email != null) body['email'] = email;
@@ -213,6 +263,7 @@ class ApiService {
       }
       throw Exception(data['message'] ?? 'Failed to update profile');
     } catch (e) {
+      _verifiedBaseUrl = null;
       throw Exception(_formatNetworkError(e));
     }
   }
@@ -226,7 +277,8 @@ class ApiService {
     if (token == null) return sampleProfiles;
 
     try {
-      final uri = Uri.parse('$baseUrl/dnd/profiles');
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/profiles');
       final res = await http
           .get(uri, headers: _headers(token))
           .timeout(_requestTimeout);
@@ -247,7 +299,8 @@ class ApiService {
     if (token == null) return;
 
     try {
-      final uri = Uri.parse('$baseUrl/dnd/profiles/${profile.id}');
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/profiles/${profile.id}');
       await http
           .put(
             uri,
@@ -265,7 +318,8 @@ class ApiService {
     if (token == null) return enabled ?? false;
 
     try {
-      final uri = Uri.parse('$baseUrl/dnd/toggle');
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/toggle');
       final Map<String, dynamic> body = {};
       if (enabled != null) body['enabled'] = enabled;
 
@@ -292,7 +346,8 @@ class ApiService {
     if (token == null) return [];
 
     try {
-      final uri = Uri.parse('$baseUrl/dnd/rules');
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/rules');
       final res = await http
           .get(uri, headers: _headers(token))
           .timeout(_requestTimeout);
