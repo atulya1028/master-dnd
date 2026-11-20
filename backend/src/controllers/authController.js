@@ -74,8 +74,8 @@ const sendOtpHandler = async (req, res) => {
       channel: 'email',
       expiresInSeconds: 300,
       delivered: true,
-      // Only include testOtp in development mode when real OTP is explicitly disabled
-      testOtp: !isProduction && !useRealOtp ? otpCode : undefined,
+      // Include testOtp in development mode for easy UI testing and auto-fill
+      testOtp: !isProduction ? otpCode : undefined,
     });
   } catch (error) {
     console.error('[sendOtpHandler] Error:', error);
