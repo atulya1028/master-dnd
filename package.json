@@ -1,0 +1,12 @@
+{
+  "name": "master-dnd",
+  "version": "1.0.0",
+  "description": "Master DND full-stack application",
+  "private": true,
+  "scripts": {
+    "web": "./run_web.sh",
+    "backend": "cd backend && npm run dev",
+    "test:backend": "node scratch/final_qa_test.js",
+    "test:flutter": "flutter test"
+  }
+}
