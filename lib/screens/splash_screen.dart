@@ -23,7 +23,9 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
-    context.read<AuthBloc>().add(const AuthCheckRequested());
+    if (context.read<AuthBloc>().state is AuthInitial) {
+      context.read<AuthBloc>().add(const AuthCheckRequested());
+    }
   }
 
   @override
@@ -32,16 +34,17 @@ class _AuthGateState extends State<AuthGate> {
 
     return BlocBuilder<AuthBloc, AuthBlocState>(
       buildWhen: (previous, current) {
-        // Only trigger full-screen route switches on significant auth state changes
+        // Only trigger full-screen route switches on significant auth state changes.
+        // Transient operational states (AuthLoading, AuthOtpSentState, AuthFailureState)
+        // are handled locally by PhoneLoginScreen & OtpVerificationScreen.
         return current is AuthInitial ||
-            current is AuthLoading ||
             current is AuthUnauthenticated ||
             current is AuthNeedsProfileFormState ||
             current is AuthenticatedState;
       },
       builder: (context, state) {
         return switch (state) {
-          AuthInitial() || AuthLoading() => Scaffold(
+          AuthInitial() => Scaffold(
               backgroundColor: c.canvas,
               body: Center(
                 child: Column(
@@ -65,7 +68,6 @@ class _AuthGateState extends State<AuthGate> {
                 ),
               ),
             ),
-          AuthUnauthenticated() => const PhoneLoginScreen(),
           AuthNeedsProfileFormState() => const ProfileFormScreen(),
           AuthenticatedState() => const AppShell(),
           _ => const PhoneLoginScreen(),

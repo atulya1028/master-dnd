@@ -7,8 +7,7 @@ import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
 import '../../core/tokens.dart';
 import '../../widgets/widgets.dart';
-import '../app_shell.dart';
-import 'profile_form_screen.dart';
+import '../splash_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
   const OtpVerificationScreen({
@@ -88,14 +87,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     return BlocConsumer<AuthBloc, AuthBlocState>(
       listener: (context, state) {
-        if (state is AuthNeedsProfileFormState) {
+        if (state is AuthNeedsProfileFormState || state is AuthenticatedState) {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const ProfileFormScreen()),
-            (route) => false,
-          );
-        } else if (state is AuthenticatedState) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const AppShell()),
+            MaterialPageRoute(builder: (_) => const AuthGate()),
             (route) => false,
           );
         } else if (state is AuthOtpSentState) {

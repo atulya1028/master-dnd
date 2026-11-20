@@ -6,6 +6,7 @@ import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
 import '../../core/tokens.dart';
 import '../../widgets/widgets.dart';
+import '../splash_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -80,7 +81,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (confirmed == true && mounted) {
       context.read<AuthBloc>().add(const AuthLogoutRequested());
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
     }
   }
 

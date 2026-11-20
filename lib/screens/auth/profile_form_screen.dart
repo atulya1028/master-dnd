@@ -6,7 +6,7 @@ import '../../bloc/auth/auth_event.dart';
 import '../../bloc/auth/auth_state.dart';
 import '../../core/tokens.dart';
 import '../../widgets/widgets.dart';
-import '../app_shell.dart';
+import '../splash_screen.dart';
 
 class ProfileFormScreen extends StatefulWidget {
   const ProfileFormScreen({super.key});
@@ -75,7 +75,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
       listener: (context, state) {
         if (state is AuthenticatedState) {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const AppShell()),
+            MaterialPageRoute(builder: (_) => const AuthGate()),
             (route) => false,
           );
         } else if (state is AuthFailureState) {

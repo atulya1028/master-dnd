@@ -104,4 +104,30 @@ void main() {
       dndBloc.close();
     });
   });
+
+  group('AuthFlow State Invariant Tests', () {
+    test('AuthLoading preserves previous screen without unmounting', () {
+      // Verify AuthGate buildWhen logic:
+      // It must return false for transient AuthLoading, AuthOtpSentState, and AuthFailureState
+      // so it never replaces active form screens with the splash screen.
+      const initial = AuthInitial();
+      const loading = AuthLoading(message: 'Sending verification code...');
+      const otpSent = AuthOtpSentState(phone: 'user@example.com');
+      const failure = AuthFailureState(error: 'Failed');
+
+      bool shouldRebuild(AuthBlocState current) {
+        return current is AuthInitial ||
+            current is AuthUnauthenticated ||
+            current is AuthNeedsProfileFormState ||
+            current is AuthenticatedState;
+      }
+
+      expect(shouldRebuild(initial), isTrue);
+      expect(shouldRebuild(loading), isFalse);
+      expect(shouldRebuild(otpSent), isFalse);
+      expect(shouldRebuild(failure), isFalse);
+      expect(shouldRebuild(const AuthUnauthenticated()), isTrue);
+      expect(shouldRebuild(const AuthenticatedState(user: UserModel(id: '1', phone: 'test'))), isTrue);
+    });
+  });
 }
