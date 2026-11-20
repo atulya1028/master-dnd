@@ -260,6 +260,7 @@ class _RulesScreenState extends State<RulesScreen> {
                   for (var i = 0; i < rules.length; i++) ...[
                     if (i > 0) const DndDivider(),
                     InkWell(
+                      onTap: () => _toggleRule(rules[i], !rules[i].active),
                       onLongPress: () => _deleteRule(rules[i]),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 12),

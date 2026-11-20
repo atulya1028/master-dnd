@@ -189,23 +189,33 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
 
-    Widget contact(String initial, String name, String detail) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: Space.s12),
-          child: Row(children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: c.accentTint,
-              child: Text(initial, style: context.text.labelLarge!.copyWith(color: c.accent)),
-            ),
-            const SizedBox(width: Space.s12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name, style: context.text.labelLarge),
-                Text(detail, style: context.text.bodySmall),
-              ]),
-            ),
-            Icon(DndIcons.phone, size: 20, color: c.armed),
-          ]),
+    Widget contact(String initial, String name, String detail) => InkWell(
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('$name: Allowed through ($detail)'),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: Space.s12),
+            child: Row(children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: c.accentTint,
+                child: Text(initial, style: context.text.labelLarge!.copyWith(color: c.accent)),
+              ),
+              const SizedBox(width: Space.s12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name, style: context.text.labelLarge),
+                  Text(detail, style: context.text.bodySmall),
+                ]),
+              ),
+              Icon(DndIcons.phone, size: 20, color: c.armed),
+            ]),
+          ),
         );
 
     return [
