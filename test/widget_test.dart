@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:master_dnd/bloc/auth/auth_bloc.dart';
@@ -6,7 +7,10 @@ import 'package:master_dnd/bloc/auth/auth_state.dart';
 import 'package:master_dnd/bloc/dnd/dnd_bloc.dart';
 import 'package:master_dnd/bloc/dnd/dnd_state.dart';
 import 'package:master_dnd/core/models.dart';
+import 'package:master_dnd/core/theme.dart';
 import 'package:master_dnd/main.dart';
+import 'package:master_dnd/screens/home_screen.dart';
+import 'package:master_dnd/screens/insights_screen.dart';
 
 void main() {
   group('Master DND Widget & App Smoke Tests', () {
@@ -120,6 +124,60 @@ void main() {
       expect(defaults.stats.blockedTotal, 84);
       expect(defaults.breakdown.length, 7);
       expect(defaults.profiles.length, 4);
+    });
+  });
+
+  group('UI Screen Interaction Widget Tests', () {
+    testWidgets('HomeScreen renders power button, duration chips, and handles toggle', (WidgetTester tester) async {
+      bool toggled = false;
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>(create: (_) => AuthBloc()),
+            BlocProvider<DndBloc>(create: (_) => DndBloc()),
+          ],
+          child: MaterialApp(
+            theme: dayTheme,
+            home: Scaffold(
+              body: HomeScreen(
+                dndOn: false,
+                onToggle: (v) => toggled = v,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Do Not Disturb is off'), findsOneWidget);
+      expect(find.text('30 min'), findsOneWidget);
+      expect(find.text('1 hour'), findsOneWidget);
+      expect(find.text('Until 6:30 AM'), findsOneWidget);
+
+      // Tap 30 min chip
+      await tester.tap(find.text('30 min'));
+      await tester.pumpAndSettle();
+      expect(find.text('Quiet for 30 minutes once started'), findsOneWidget);
+
+      // Tap power button
+      await tester.tap(find.bySemanticsLabel('Turn Do Not Disturb on'));
+      await tester.pumpAndSettle();
+      expect(toggled, isTrue);
+    });
+
+    testWidgets('InsightsScreen renders headers and range chips', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: dayTheme,
+          home: const Scaffold(
+            body: InsightsScreen(),
+          ),
+        ),
+      );
+
+      expect(find.text('Insights'), findsOneWidget);
+      expect(find.text('This week'), findsOneWidget);
+      expect(find.text('Last week'), findsOneWidget);
+      expect(find.text('Month'), findsOneWidget);
     });
   });
 
