@@ -39,7 +39,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
         return;
       }
 
-      final profile = await _api.getProfile();
+      final profile = await _api.getProfile().timeout(const Duration(seconds: 4));
       if (!profile.isProfileComplete || profile.name.trim().isEmpty) {
         emit(AuthNeedsProfileFormState(user: profile));
       } else {

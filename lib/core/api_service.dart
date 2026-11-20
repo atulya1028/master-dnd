@@ -15,7 +15,7 @@ class ApiService {
 
   static const _tokenKey = 'master_dnd_auth_token';
   static const _userKey = 'master_dnd_cached_user';
-  static const Duration _requestTimeout = Duration(seconds: 10);
+  static const Duration _requestTimeout = Duration(seconds: 25);
 
   /// Determines appropriate local host for Android emulator vs iOS/macOS/web,
   /// or loads a production URL passed via --dart-define=API_URL=https://...
@@ -23,12 +23,14 @@ class ApiService {
     const envUrl = String.fromEnvironment('API_URL');
     if (envUrl.isNotEmpty) return envUrl;
 
-    if (kIsWeb) return 'http://127.0.0.1:5001/api';
+    if (kIsWeb) {
+      final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
+      return 'http://$host:5001/api';
+    }
     try {
       if (Platform.isAndroid) return 'http://10.0.2.2:5001/api';
     } catch (_) {}
-    // Use 127.0.0.1 instead of localhost to prevent macOS IPv6 resolution delays
-    return 'http://127.0.0.1:5001/api';
+    return 'http://localhost:5001/api';
   }
 
   late String baseUrl;
@@ -83,7 +85,7 @@ class ApiService {
           .post(
             uri,
             headers: _headers(),
-            body: jsonEncode({'phone': phone}),
+            body: jsonEncode({'email': phone, 'identifier': phone, 'phone': phone}),
           )
           .timeout(_requestTimeout);
 
@@ -106,7 +108,7 @@ class ApiService {
           .post(
             uri,
             headers: _headers(),
-            body: jsonEncode({'phone': phone, 'otp': otp}),
+            body: jsonEncode({'email': phone, 'identifier': phone, 'phone': phone, 'otp': otp}),
           )
           .timeout(_requestTimeout);
 

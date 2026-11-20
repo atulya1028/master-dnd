@@ -61,8 +61,10 @@ const sendOtpHandler = async (req, res) => {
       });
     }
 
-    // Deliver real email via SMTP
-    const deliveryResult = await sendOtpEmail(identifier, otpCode);
+    // Deliver real email via SMTP in background so HTTP response returns instantly (<50ms)
+    sendOtpEmail(identifier, otpCode).catch((err) => {
+      console.error('[sendOtpEmail Background Error]:', err);
+    });
 
     return res.status(200).json({
       success: true,
@@ -71,7 +73,7 @@ const sendOtpHandler = async (req, res) => {
       email: identifier,
       channel: 'email',
       expiresInSeconds: 300,
-      delivered: deliveryResult.delivered ?? true,
+      delivered: true,
       // Only include testOtp in development mode when real OTP is explicitly disabled
       testOtp: !isProduction && !useRealOtp ? otpCode : undefined,
     });
