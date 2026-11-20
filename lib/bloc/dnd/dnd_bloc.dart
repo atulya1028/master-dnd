@@ -11,6 +11,7 @@ class DndBloc extends Bloc<DndEvent, DndState> {
     on<DndLoadRequested>(_onLoadRequested);
     on<DndToggleProfileRequested>(_onToggleProfileRequested);
     on<DndSaveProfileRequested>(_onSaveProfileRequested);
+    on<DndDeleteProfileRequested>(_onDeleteProfileRequested);
   }
 
   final ApiService _api;
@@ -56,7 +57,19 @@ class DndBloc extends Bloc<DndEvent, DndState> {
     DndSaveProfileRequested event,
     Emitter<DndState> emit,
   ) async {
-    await _api.updateDndProfile(event.profile);
+    if (event.profile.id.isEmpty) {
+      await _api.createDndProfile(event.profile);
+    } else {
+      await _api.updateDndProfile(event.profile);
+    }
+    add(const DndLoadRequested());
+  }
+
+  Future<void> _onDeleteProfileRequested(
+    DndDeleteProfileRequested event,
+    Emitter<DndState> emit,
+  ) async {
+    await _api.deleteDndProfile(event.profileId);
     add(const DndLoadRequested());
   }
 }

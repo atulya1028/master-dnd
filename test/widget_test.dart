@@ -82,12 +82,44 @@ void main() {
       final exported = profile.toJson();
       expect(exported['mode'], 'totalSilence');
       expect(exported['active'], isTrue);
+      expect(exported['callWhitelist'], 'Starred');
+      expect(exported['messageWhitelist'], 'VIP only');
+      expect(exported['repeatCallersWindowMin'], 15);
     });
 
     test('DndIcons resolves unknown keys gracefully to moon icon', () {
       expect(DndIcons.fromKey('moon'), DndIcons.moon);
       expect(DndIcons.fromKey('briefcase'), DndIcons.briefcase);
       expect(DndIcons.fromKey('nonexistent_key'), DndIcons.moon);
+    });
+
+    test('DndRule parses json and converts to json properly', () {
+      final json = {
+        'id': 'rule_1',
+        'title': 'Night focus',
+        'subtitle': '10 PM to 7 AM',
+        'triggerType': 'schedule',
+        'active': true,
+      };
+
+      final rule = DndRule.fromJson(json);
+      expect(rule.id, 'rule_1');
+      expect(rule.title, 'Night focus');
+      expect(rule.subtitle, '10 PM to 7 AM');
+      expect(rule.triggerType, 'schedule');
+      expect(rule.active, isTrue);
+
+      final exported = rule.toJson();
+      expect(exported['title'], 'Night focus');
+      expect(exported['triggerType'], 'schedule');
+    });
+
+    test('InsightsData parses json and defaults correctly', () {
+      final defaults = InsightsData.defaults();
+      expect(defaults.stats.focusHours, 31);
+      expect(defaults.stats.blockedTotal, 84);
+      expect(defaults.breakdown.length, 7);
+      expect(defaults.profiles.length, 4);
     });
   });
 

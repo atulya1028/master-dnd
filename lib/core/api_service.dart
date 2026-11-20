@@ -294,6 +294,33 @@ class ApiService {
     return sampleProfiles;
   }
 
+  Future<DndProfile?> createDndProfile(DndProfile profile) async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/profiles');
+      final res = await http
+          .post(
+            uri,
+            headers: _headers(token),
+            body: jsonEncode(profile.toJson()),
+          )
+          .timeout(_requestTimeout);
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        if (data['profile'] != null) {
+          return DndProfile.fromJson(data['profile'] as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[ApiService.createDndProfile] Error: $e');
+    }
+    return null;
+  }
+
   Future<void> updateDndProfile(DndProfile profile) async {
     final token = await getToken();
     if (token == null) return;
@@ -310,6 +337,23 @@ class ApiService {
           .timeout(_requestTimeout);
     } catch (e) {
       debugPrint('[ApiService.updateDndProfile] Error: $e');
+    }
+  }
+
+  Future<bool> deleteDndProfile(String profileId) async {
+    final token = await getToken();
+    if (token == null) return false;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/profiles/$profileId');
+      final res = await http
+          .delete(uri, headers: _headers(token))
+          .timeout(_requestTimeout);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService.deleteDndProfile] Error: $e');
+      return false;
     }
   }
 
@@ -341,6 +385,10 @@ class ApiService {
     return enabled ?? false;
   }
 
+  // -------------------------------------------------------------
+  // RULES & SCHEDULES
+  // -------------------------------------------------------------
+
   Future<List<DndRule>> getRules() async {
     final token = await getToken();
     if (token == null) return [];
@@ -361,5 +409,107 @@ class ApiService {
       debugPrint('[ApiService.getRules] Error: $e');
     }
     return [];
+  }
+
+  Future<DndRule?> createRule(DndRule rule) async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/rules');
+      final res = await http
+          .post(
+            uri,
+            headers: _headers(token),
+            body: jsonEncode(rule.toJson()),
+          )
+          .timeout(_requestTimeout);
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        if (data['rule'] != null) {
+          return DndRule.fromJson(data['rule'] as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[ApiService.createRule] Error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> updateRule(
+    String ruleId, {
+    bool? active,
+    String? title,
+    String? subtitle,
+    String? triggerType,
+  }) async {
+    final token = await getToken();
+    if (token == null) return false;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/rules/$ruleId');
+      final Map<String, dynamic> body = {};
+      if (active != null) body['active'] = active;
+      if (title != null) body['title'] = title;
+      if (subtitle != null) body['subtitle'] = subtitle;
+      if (triggerType != null) body['triggerType'] = triggerType;
+
+      final res = await http
+          .put(
+            uri,
+            headers: _headers(token),
+            body: jsonEncode(body),
+          )
+          .timeout(_requestTimeout);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService.updateRule] Error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteRule(String ruleId) async {
+    final token = await getToken();
+    if (token == null) return false;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/rules/$ruleId');
+      final res = await http
+          .delete(uri, headers: _headers(token))
+          .timeout(_requestTimeout);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService.deleteRule] Error: $e');
+      return false;
+    }
+  }
+
+  // -------------------------------------------------------------
+  // INSIGHTS & STATS
+  // -------------------------------------------------------------
+
+  Future<InsightsData> getInsights({int range = 0}) async {
+    final token = await getToken();
+    if (token == null) return InsightsData.defaults();
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/insights?range=$range');
+      final res = await http
+          .get(uri, headers: _headers(token))
+          .timeout(_requestTimeout);
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        return InsightsData.fromJson(data);
+      }
+    } catch (e) {
+      debugPrint('[ApiService.getInsights] Error: $e');
+    }
+    return InsightsData.defaults();
   }
 }
