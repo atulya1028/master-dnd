@@ -30,16 +30,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   String? _localError;
   int _secondsRemaining = 60;
   Timer? _timer;
-  String? _currentTestOtp;
 
   @override
   void initState() {
     super.initState();
-    _currentTestOtp = widget.initialTestOtp;
     _startCountdown();
-    if (_currentTestOtp != null && _currentTestOtp!.isNotEmpty) {
-      _otpController.text = _currentTestOtp!;
-    }
   }
 
   void _startCountdown() {
@@ -105,8 +100,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           );
         } else if (state is AuthOtpSentState) {
           setState(() {
-            _currentTestOtp = state.testOtp;
-            if (state.testOtp != null) _otpController.text = state.testOtp!;
+            _otpController.clear();
             _localError = null;
           });
           _startCountdown();
@@ -163,36 +157,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     style: context.text.bodySmall!.copyWith(color: c.textSecondary),
                   ),
                   const SizedBox(height: Space.s32),
-
-                  // Dev test OTP auto-fill chip
-                  if (_currentTestOtp != null) ...[
-                    GestureDetector(
-                      onTap: () {
-                        _otpController.text = _currentTestOtp!;
-                        setState(() {});
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: Space.s12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: c.accentTint,
-                          borderRadius: BorderRadius.circular(Radii.input),
-                          border: Border.all(color: c.accent.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.key, size: 16, color: c.accent),
-                            const SizedBox(width: Space.s8),
-                            Text(
-                              'Test OTP: $_currentTestOtp (tap to fill)',
-                              style: context.text.labelMedium!.copyWith(color: c.accent),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: Space.s16),
-                  ],
 
                   const OverlineText('6-Digit Verification Code'),
                   const SizedBox(height: Space.s8),

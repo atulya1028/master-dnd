@@ -162,7 +162,7 @@ class _ProfileFormScreenState extends State<ProfileFormScreen> {
                               textCapitalization: TextCapitalization.words,
                               style: context.text.titleMedium,
                               decoration: const InputDecoration(
-                                hintText: 'e.g. Atulya Agrawal',
+                                hintText: 'e.g. John Doe',
                                 border: InputBorder.none,
                               ),
                               onChanged: (val) {

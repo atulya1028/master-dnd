@@ -205,19 +205,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: Space.s24),
 
-                // Registered Phone (Read-Only)
-                const OverlineText('Registered Phone Number'),
+                // Registered Email (Read-Only)
+                const OverlineText('Registered Email Address'),
                 const SizedBox(height: Space.s8),
                 DndCard(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 14),
                     child: Row(
                       children: [
-                        Icon(Icons.phone_iphone, size: 20, color: c.textSecondary),
+                        Icon(Icons.mail_outline, size: 20, color: c.textSecondary),
                         const SizedBox(width: Space.s12),
                         Expanded(
                           child: Text(
-                            user?.phone ?? 'Not linked',
+                            user?.email ?? 'Not linked',
                             style: context.text.titleMedium,
                           ),
                         ),
@@ -237,7 +237,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 style: context.text.bodySmall!.copyWith(
                                   color: c.armed,
                                   fontWeight: FontWeight.bold,
-                                ),
+                                  ),
                               ),
                             ],
                           ),
@@ -259,7 +259,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       textCapitalization: TextCapitalization.words,
                       style: context.text.titleMedium,
                       decoration: const InputDecoration(
-                        hintText: 'Enter your name',
+                        hintText: 'e.g. John Doe',
                         border: InputBorder.none,
                       ),
                     ),

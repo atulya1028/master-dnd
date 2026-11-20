@@ -74,8 +74,6 @@ const sendOtpHandler = async (req, res) => {
       channel: 'email',
       expiresInSeconds: 300,
       delivered: true,
-      // Include testOtp in development mode for easy UI testing and auto-fill
-      testOtp: !isProduction ? otpCode : undefined,
     });
   } catch (error) {
     console.error('[sendOtpHandler] Error:', error);
@@ -139,9 +137,8 @@ const verifyOtpHandler = async (req, res) => {
       });
     }
 
-    // In dev mode, allow master bypass "123456" for convenience if configured, or check exact OTP
-    const isDev = process.env.NODE_ENV !== 'production';
-    const isMatch = record.otp === trimmedOtp || (isDev && trimmedOtp === '123456');
+    // Strictly enforce real OTP verification
+    const isMatch = record.otp === trimmedOtp;
 
     if (!isMatch) {
       record.attempts = (record.attempts || 0) + 1;
