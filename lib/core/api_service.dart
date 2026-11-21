@@ -17,6 +17,10 @@ class ApiService {
   static const _userKey = 'master_dnd_cached_user';
   static const Duration _requestTimeout = Duration(seconds: 15);
 
+  /// Production Microsoft Azure App Service Cloud API URL (Live 24/7)
+  static const String _azureUrl =
+      'https://master-dnd-atulya-fje0aze7fkfjarfa.centralindia-01.azurewebsites.net/api';
+
   /// Local development Mac LAN IPs to support physical Android/iOS devices on the local Wi-Fi
   static const String _currentLanHost = '192.168.31.183:5001';
   static const String _fallbackLanHost = '192.168.31.29:5001';
@@ -29,15 +33,16 @@ class ApiService {
     if (kIsWeb) {
       final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
       return [
+        _azureUrl,
         'http://$host:5001/api',
         'http://localhost:5001/api',
         'http://127.0.0.1:5001/api',
-        'http://$_currentLanHost/api',
       ];
     }
     try {
       if (Platform.isAndroid) {
         return [
+          _azureUrl,                       // Live Azure Cloud Backend
           'http://$_currentLanHost/api',   // Physical Android phone over Wi-Fi
           'http://10.0.2.2:5001/api',       // Android Emulator host loopback
           'http://127.0.0.1:5001/api',      // adb reverse tcp:5001 tcp:5001
@@ -47,6 +52,7 @@ class ApiService {
       }
       if (Platform.isIOS) {
         return [
+          _azureUrl,                       // Live Azure Cloud Backend
           'http://$_currentLanHost/api',   // Physical iPhone over Wi-Fi
           'http://localhost:5001/api',      // iOS Simulator
           'http://127.0.0.1:5001/api',
@@ -55,6 +61,7 @@ class ApiService {
       }
     } catch (_) {}
     return [
+      _azureUrl,
       'http://localhost:5001/api',
       'http://127.0.0.1:5001/api',
       'http://$_currentLanHost/api',
