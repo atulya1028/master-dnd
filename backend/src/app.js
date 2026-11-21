@@ -11,6 +11,9 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
+// Trust reverse proxy (Microsoft Azure, Cloudflare, Nginx)
+app.set('trust proxy', 1);
+
 // 1. Permissive, cross-origin-friendly Helmet security configuration for production
 app.use(
   helmet({
