@@ -1,29 +1,38 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const DndProfile = require('../models/DndProfile');
 const DndRule = require('../models/DndRule');
 const { getIsConnected } = require('../config/db');
 const devStore = require('../utils/devStore');
 
+const isValidObjectId = (val) => Boolean(val && mongoose.Types.ObjectId.isValid(val));
+
 /**
  * GET /api/dnd/profiles
  */
 const getProfilesHandler = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     let profiles = [];
 
-    if (getIsConnected()) {
-      profiles = await DndProfile.find({ userId }).sort({ createdAt: 1 });
-      // If none found, reseed defaults
-      if (profiles.length === 0) {
-        const defs = devStore.getDefaultProfiles(userId);
-        for (const p of defs) {
-          const { _id, ...rest } = p;
-          await DndProfile.create(rest);
-        }
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
         profiles = await DndProfile.find({ userId }).sort({ createdAt: 1 });
+        if (profiles.length === 0) {
+          const defs = devStore.getDefaultProfiles(userId);
+          for (const p of defs) {
+            const { _id, ...rest } = p;
+            try { await DndProfile.create(rest); } catch (_) {}
+          }
+          profiles = await DndProfile.find({ userId }).sort({ createdAt: 1 });
+        }
+      } catch (dbErr) {
+        console.warn('[getProfilesHandler] MongoDB query failed, falling back:', dbErr.message);
+        profiles = [];
       }
-    } else {
+    }
+
+    if (profiles.length === 0) {
       for (const p of devStore.profiles.values()) {
         if (p.userId === userId) profiles.push(p);
       }
@@ -64,7 +73,7 @@ const getProfilesHandler = async (req, res) => {
  */
 const createProfileHandler = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     const {
       name,
       icon = 'moon',
@@ -76,30 +85,36 @@ const createProfileHandler = async (req, res) => {
       messageWhitelist = 'VIP only',
     } = req.body;
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Profile name is required' });
     }
 
     let newProfile = null;
-    if (getIsConnected()) {
-      newProfile = await DndProfile.create({
-        userId,
-        name,
-        icon,
-        meta,
-        active: false,
-        mode,
-        autoReply,
-        hideNotifications,
-        callWhitelist,
-        messageWhitelist,
-      });
-    } else {
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
+        newProfile = await DndProfile.create({
+          userId,
+          name: name.trim(),
+          icon,
+          meta,
+          active: false,
+          mode,
+          autoReply,
+          hideNotifications,
+          callWhitelist,
+          messageWhitelist,
+        });
+      } catch (dbErr) {
+        console.warn('[createProfileHandler] MongoDB create warning:', dbErr.message);
+      }
+    }
+
+    if (!newProfile) {
       const id = devStore.genId();
       newProfile = {
         _id: id,
         userId,
-        name,
+        name: name.trim(),
         icon,
         meta,
         active: false,
@@ -110,6 +125,8 @@ const createProfileHandler = async (req, res) => {
         messageWhitelist,
       };
       devStore.profiles.set(id, newProfile);
+    } else {
+      devStore.profiles.set(newProfile._id.toString(), newProfile);
     }
 
     return res.status(201).json({
@@ -138,56 +155,60 @@ const createProfileHandler = async (req, res) => {
 const updateProfileHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     const { name, icon, meta, active, mode, autoReply, hideNotifications, callWhitelist, messageWhitelist } =
       req.body;
 
     let updated = null;
 
-    if (getIsConnected()) {
-      // If setting this profile to active: true, deactivate others
-      if (active === true) {
-        await DndProfile.updateMany({ userId }, { active: false });
-      }
-
-      updated = await DndProfile.findOneAndUpdate(
-        { _id: id, userId },
-        {
-          $set: {
-            ...(name !== undefined && { name }),
-            ...(icon !== undefined && { icon }),
-            ...(meta !== undefined && { meta }),
-            ...(active !== undefined && { active }),
-            ...(mode !== undefined && { mode }),
-            ...(autoReply !== undefined && { autoReply }),
-            ...(hideNotifications !== undefined && { hideNotifications }),
-            ...(callWhitelist !== undefined && { callWhitelist }),
-            ...(messageWhitelist !== undefined && { messageWhitelist }),
-          },
-        },
-        { new: true }
-      );
-    } else {
-      const profile = devStore.profiles.get(id);
-      if (profile && profile.userId === userId) {
+    if (getIsConnected() && isValidObjectId(id) && isValidObjectId(userId)) {
+      try {
         if (active === true) {
-          for (const p of devStore.profiles.values()) {
-            if (p.userId === userId) p.active = false;
-          }
+          await DndProfile.updateMany({ userId }, { active: false });
         }
-        if (name !== undefined) profile.name = name;
-        if (icon !== undefined) profile.icon = icon;
-        if (meta !== undefined) profile.meta = meta;
-        if (active !== undefined) profile.active = active;
-        if (mode !== undefined) profile.mode = mode;
-        if (autoReply !== undefined) profile.autoReply = autoReply;
-        if (hideNotifications !== undefined) profile.hideNotifications = hideNotifications;
-        if (callWhitelist !== undefined) profile.callWhitelist = callWhitelist;
-        if (messageWhitelist !== undefined) profile.messageWhitelist = messageWhitelist;
 
-        devStore.profiles.set(id, profile);
-        updated = profile;
+        updated = await DndProfile.findOneAndUpdate(
+          { _id: id, userId },
+          {
+            $set: {
+              ...(name !== undefined && { name: name.trim() }),
+              ...(icon !== undefined && { icon }),
+              ...(meta !== undefined && { meta }),
+              ...(active !== undefined && { active }),
+              ...(mode !== undefined && { mode }),
+              ...(autoReply !== undefined && { autoReply }),
+              ...(hideNotifications !== undefined && { hideNotifications }),
+              ...(callWhitelist !== undefined && { callWhitelist }),
+              ...(messageWhitelist !== undefined && { messageWhitelist }),
+            },
+          },
+          { new: true }
+        );
+      } catch (dbErr) {
+        console.warn('[updateProfileHandler] MongoDB update warning:', dbErr.message);
       }
+    }
+
+    // In-memory update / fallback
+    const profile = devStore.profiles.get(id);
+    if (profile && profile.userId === userId) {
+      if (active === true) {
+        for (const p of devStore.profiles.values()) {
+          if (p.userId === userId) p.active = false;
+        }
+      }
+      if (name !== undefined) profile.name = name.trim();
+      if (icon !== undefined) profile.icon = icon;
+      if (meta !== undefined) profile.meta = meta;
+      if (active !== undefined) profile.active = active;
+      if (mode !== undefined) profile.mode = mode;
+      if (autoReply !== undefined) profile.autoReply = autoReply;
+      if (hideNotifications !== undefined) profile.hideNotifications = hideNotifications;
+      if (callWhitelist !== undefined) profile.callWhitelist = callWhitelist;
+      if (messageWhitelist !== undefined) profile.messageWhitelist = messageWhitelist;
+
+      devStore.profiles.set(id, profile);
+      if (!updated) updated = profile;
     }
 
     if (!updated) {
@@ -220,16 +241,17 @@ const updateProfileHandler = async (req, res) => {
 const deleteProfileHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
 
-    if (getIsConnected()) {
-      await DndProfile.findOneAndDelete({ _id: id, userId });
-    } else {
-      const p = devStore.profiles.get(id);
-      if (p && p.userId === userId) {
-        devStore.profiles.delete(id);
+    if (getIsConnected() && isValidObjectId(id) && isValidObjectId(userId)) {
+      try {
+        await DndProfile.findOneAndDelete({ _id: id, userId });
+      } catch (dbErr) {
+        console.warn('[deleteProfileHandler] MongoDB delete warning:', dbErr.message);
       }
     }
+
+    devStore.profiles.delete(id);
 
     return res.status(200).json({ success: true, message: 'Profile deleted' });
   } catch (error) {
@@ -243,23 +265,30 @@ const deleteProfileHandler = async (req, res) => {
  */
 const toggleMasterDndHandler = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     const { enabled } = req.body;
 
     let targetState = enabled;
 
-    if (getIsConnected()) {
-      const user = await User.findById(userId);
-      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-      if (targetState === undefined) targetState = !user.dndEnabled;
-      user.dndEnabled = targetState;
-      await user.save();
-    } else {
-      const user = devStore.users.get(userId);
-      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-      if (targetState === undefined) targetState = !user.dndEnabled;
-      user.dndEnabled = targetState;
-      devStore.users.set(userId, user);
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
+        const user = await User.findById(userId);
+        if (user) {
+          if (targetState === undefined) targetState = !user.dndEnabled;
+          user.dndEnabled = targetState;
+          await user.save();
+        }
+      } catch (dbErr) {
+        console.warn('[toggleMasterDndHandler] MongoDB toggle warning:', dbErr.message);
+      }
+    }
+
+    // Always keep in sync in memory
+    const devUser = devStore.users.get(userId);
+    if (devUser) {
+      if (targetState === undefined) targetState = !devUser.dndEnabled;
+      devUser.dndEnabled = targetState;
+      devStore.users.set(userId, devUser);
     }
 
     return res.status(200).json({
@@ -277,20 +306,27 @@ const toggleMasterDndHandler = async (req, res) => {
  */
 const getRulesHandler = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     let rules = [];
 
-    if (getIsConnected()) {
-      rules = await DndRule.find({ userId }).sort({ createdAt: 1 });
-      if (rules.length === 0) {
-        const defs = devStore.getDefaultRules(userId);
-        for (const r of defs) {
-          const { _id, ...rest } = r;
-          await DndRule.create(rest);
-        }
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
         rules = await DndRule.find({ userId }).sort({ createdAt: 1 });
+        if (rules.length === 0) {
+          const defs = devStore.getDefaultRules(userId);
+          for (const r of defs) {
+            const { _id, ...rest } = r;
+            try { await DndRule.create(rest); } catch (_) {}
+          }
+          rules = await DndRule.find({ userId }).sort({ createdAt: 1 });
+        }
+      } catch (dbErr) {
+        console.warn('[getRulesHandler] MongoDB query warning:', dbErr.message);
+        rules = [];
       }
-    } else {
+    }
+
+    if (rules.length === 0) {
       for (const r of devStore.rules.values()) {
         if (r.userId === userId) rules.push(r);
       }
@@ -323,7 +359,7 @@ const getRulesHandler = async (req, res) => {
  */
 const createRuleHandler = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     const { title, subtitle = '', triggerType = 'schedule', active = true } = req.body;
 
     if (!title || !title.trim()) {
@@ -331,15 +367,21 @@ const createRuleHandler = async (req, res) => {
     }
 
     let newRule = null;
-    if (getIsConnected()) {
-      newRule = await DndRule.create({
-        userId,
-        title: title.trim(),
-        subtitle: subtitle.trim(),
-        triggerType,
-        active: Boolean(active),
-      });
-    } else {
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
+        newRule = await DndRule.create({
+          userId,
+          title: title.trim(),
+          subtitle: subtitle.trim(),
+          triggerType,
+          active: Boolean(active),
+        });
+      } catch (dbErr) {
+        console.warn('[createRuleHandler] MongoDB create warning:', dbErr.message);
+      }
+    }
+
+    if (!newRule) {
       const id = devStore.genId();
       newRule = {
         _id: id,
@@ -350,6 +392,8 @@ const createRuleHandler = async (req, res) => {
         active: Boolean(active),
       };
       devStore.rules.set(id, newRule);
+    } else {
+      devStore.rules.set(newRule._id.toString(), newRule);
     }
 
     return res.status(201).json({
@@ -375,33 +419,37 @@ const createRuleHandler = async (req, res) => {
 const updateRuleHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
     const { title, subtitle, triggerType, active } = req.body;
 
     let updated = null;
-    if (getIsConnected()) {
-      updated = await DndRule.findOneAndUpdate(
-        { _id: id, userId },
-        {
-          $set: {
-            ...(title !== undefined && { title: title.trim() }),
-            ...(subtitle !== undefined && { subtitle: subtitle.trim() }),
-            ...(triggerType !== undefined && { triggerType }),
-            ...(active !== undefined && { active: Boolean(active) }),
+    if (getIsConnected() && isValidObjectId(id) && isValidObjectId(userId)) {
+      try {
+        updated = await DndRule.findOneAndUpdate(
+          { _id: id, userId },
+          {
+            $set: {
+              ...(title !== undefined && { title: title.trim() }),
+              ...(subtitle !== undefined && { subtitle: subtitle.trim() }),
+              ...(triggerType !== undefined && { triggerType }),
+              ...(active !== undefined && { active: Boolean(active) }),
+            },
           },
-        },
-        { new: true }
-      );
-    } else {
-      const rule = devStore.rules.get(id);
-      if (rule && rule.userId === userId) {
-        if (title !== undefined) rule.title = title.trim();
-        if (subtitle !== undefined) rule.subtitle = subtitle.trim();
-        if (triggerType !== undefined) rule.triggerType = triggerType;
-        if (active !== undefined) rule.active = Boolean(active);
-        devStore.rules.set(id, rule);
-        updated = rule;
+          { new: true }
+        );
+      } catch (dbErr) {
+        console.warn('[updateRuleHandler] MongoDB update warning:', dbErr.message);
       }
+    }
+
+    const rule = devStore.rules.get(id);
+    if (rule && rule.userId === userId) {
+      if (title !== undefined) rule.title = title.trim();
+      if (subtitle !== undefined) rule.subtitle = subtitle.trim();
+      if (triggerType !== undefined) rule.triggerType = triggerType;
+      if (active !== undefined) rule.active = Boolean(active);
+      devStore.rules.set(id, rule);
+      if (!updated) updated = rule;
     }
 
     if (!updated) {
@@ -431,16 +479,17 @@ const updateRuleHandler = async (req, res) => {
 const deleteRuleHandler = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
 
-    if (getIsConnected()) {
-      await DndRule.findOneAndDelete({ _id: id, userId });
-    } else {
-      const rule = devStore.rules.get(id);
-      if (rule && rule.userId === userId) {
-        devStore.rules.delete(id);
+    if (getIsConnected() && isValidObjectId(id) && isValidObjectId(userId)) {
+      try {
+        await DndRule.findOneAndDelete({ _id: id, userId });
+      } catch (dbErr) {
+        console.warn('[deleteRuleHandler] MongoDB delete warning:', dbErr.message);
       }
     }
+
+    devStore.rules.delete(id);
 
     return res.status(200).json({ success: true, message: 'Rule deleted successfully' });
   } catch (error) {

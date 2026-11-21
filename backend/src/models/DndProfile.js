@@ -27,7 +27,6 @@ const dndProfileSchema = new mongoose.Schema(
     },
     mode: {
       type: String,
-      enum: ['totalSilence', 'priorityOnly', 'alarmsOnly', 'custom'],
       default: 'priorityOnly',
     },
     autoReply: {

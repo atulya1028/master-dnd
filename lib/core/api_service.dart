@@ -17,8 +17,10 @@ class ApiService {
   static const _userKey = 'master_dnd_cached_user';
   static const Duration _requestTimeout = Duration(seconds: 15);
 
-  /// Local development Mac LAN IP to support physical Android/iOS devices on the same Wi-Fi
-  static const String _lanHost = '192.168.31.29:5001';
+  /// Local development Mac LAN IPs to support physical Android/iOS devices on the local Wi-Fi
+  static const String _currentLanHost = '192.168.31.183:5001';
+  static const String _fallbackLanHost = '192.168.31.29:5001';
+  static const String _activeUrlPrefKey = 'master_dnd_active_base_url';
 
   static List<String> get candidateBaseUrls {
     const envUrl = String.fromEnvironment('API_URL');
@@ -26,21 +28,37 @@ class ApiService {
 
     if (kIsWeb) {
       final host = Uri.base.host.isNotEmpty ? Uri.base.host : 'localhost';
-      return ['http://$host:5001/api'];
+      return [
+        'http://$host:5001/api',
+        'http://localhost:5001/api',
+        'http://127.0.0.1:5001/api',
+        'http://$_currentLanHost/api',
+      ];
     }
     try {
       if (Platform.isAndroid) {
         return [
-          'http://$_lanHost/api',       // Physical Android phone over local Wi-Fi
-          'http://10.0.2.2:5001/api',   // Android Emulator
-          'http://127.0.0.1:5001/api',  // adb reverse
+          'http://$_currentLanHost/api',   // Physical Android phone over Wi-Fi
+          'http://10.0.2.2:5001/api',       // Android Emulator host loopback
+          'http://127.0.0.1:5001/api',      // adb reverse tcp:5001 tcp:5001
           'http://localhost:5001/api',
+          'http://$_fallbackLanHost/api',
+        ];
+      }
+      if (Platform.isIOS) {
+        return [
+          'http://$_currentLanHost/api',   // Physical iPhone over Wi-Fi
+          'http://localhost:5001/api',      // iOS Simulator
+          'http://127.0.0.1:5001/api',
+          'http://$_fallbackLanHost/api',
         ];
       }
     } catch (_) {}
     return [
       'http://localhost:5001/api',
-      'http://$_lanHost/api',
+      'http://127.0.0.1:5001/api',
+      'http://$_currentLanHost/api',
+      'http://$_fallbackLanHost/api',
     ];
   }
 
@@ -49,8 +67,31 @@ class ApiService {
   late String baseUrl;
   String? _verifiedBaseUrl;
 
+  Future<void> setCustomBaseUrl(String url) async {
+    _verifiedBaseUrl = url;
+    baseUrl = url;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activeUrlPrefKey, url);
+  }
+
   Future<String> resolveBaseUrl() async {
     if (_verifiedBaseUrl != null) return _verifiedBaseUrl!;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cached = prefs.getString(_activeUrlPrefKey);
+
+    // 1. Check previously verified URL first for ultra-fast startup (<50ms)
+    if (cached != null && cached.isNotEmpty) {
+      try {
+        final probeUri = Uri.parse(cached.replaceAll('/api', '/api/health'));
+        final res = await http.get(probeUri).timeout(const Duration(milliseconds: 1000));
+        if (res.statusCode == 200) {
+          _verifiedBaseUrl = cached;
+          baseUrl = cached;
+          return cached;
+        }
+      } catch (_) {}
+    }
 
     final candidates = candidateBaseUrls;
     if (candidates.length <= 1) {
@@ -59,20 +100,30 @@ class ApiService {
       return _verifiedBaseUrl!;
     }
 
-    // Fast discovery: check which candidate is active
-    for (final candidate in candidates) {
+    // 2. Fast parallel probe across all candidate endpoints (<1200ms max)
+    final probeFutures = candidates.map((candidate) async {
       try {
         final probeUri = Uri.parse(candidate.replaceAll('/api', '/api/health'));
-        final res = await http.get(probeUri).timeout(const Duration(milliseconds: 1500));
+        final res = await http.get(probeUri).timeout(const Duration(milliseconds: 1200));
         if (res.statusCode == 200) {
-          debugPrint('[ApiService] Auto-detected backend endpoint: $candidate');
-          _verifiedBaseUrl = candidate;
-          baseUrl = candidate;
           return candidate;
         }
       } catch (_) {}
+      return null;
+    });
+
+    final results = await Future.wait(probeFutures);
+    for (final working in results) {
+      if (working != null) {
+        debugPrint('[ApiService] Verified active backend endpoint: $working');
+        _verifiedBaseUrl = working;
+        baseUrl = working;
+        await prefs.setString(_activeUrlPrefKey, working);
+        return working;
+      }
     }
 
+    // 3. Fallback to candidate default
     _verifiedBaseUrl = candidates.first;
     baseUrl = candidates.first;
     return _verifiedBaseUrl!;

@@ -53,26 +53,31 @@ const sendOtpHandler = async (req, res) => {
     const otpCode = useRealOtp ? generateOtp() : process.env.FIXED_DEV_OTP;
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
+    // Always store in memory for ultra-fast, 100% resilient verification
+    devStore.otps.set(identifier, {
+      identifier,
+      email: identifier,
+      otp: otpCode,
+      expiresAt,
+      verified: false,
+      attempts: 0,
+    });
+
+    // Also persist to MongoDB if connected
     if (getIsConnected()) {
-      // Remove any pending OTPs for this identifier
-      await Otp.deleteMany({ identifier });
-      await Otp.create({
-        identifier,
-        email: identifier,
-        otp: otpCode,
-        expiresAt,
-        verified: false,
-        attempts: 0,
-      });
-    } else {
-      devStore.otps.set(identifier, {
-        identifier,
-        email: identifier,
-        otp: otpCode,
-        expiresAt,
-        verified: false,
-        attempts: 0,
-      });
+      try {
+        await Otp.deleteMany({ identifier });
+        await Otp.create({
+          identifier,
+          email: identifier,
+          otp: otpCode,
+          expiresAt,
+          verified: false,
+          attempts: 0,
+        });
+      } catch (dbErr) {
+        console.warn('[sendOtpHandler] MongoDB OTP persistence warning:', dbErr.message);
+      }
     }
 
     // Deliver real email via SMTP in background so HTTP response returns instantly (<50ms)
@@ -134,10 +139,15 @@ const verifyOtpHandler = async (req, res) => {
 
     let record = null;
     if (getIsConnected()) {
-      record = await Otp.findOne({
-        $or: [{ identifier }, { email: identifier }],
-      }).sort({ createdAt: -1 });
-    } else {
+      try {
+        record = await Otp.findOne({
+          $or: [{ identifier }, { email: identifier }],
+        }).sort({ createdAt: -1 });
+      } catch (dbErr) {
+        console.warn('[verifyOtpHandler] MongoDB OTP lookup warning:', dbErr.message);
+      }
+    }
+    if (!record) {
       record = devStore.otps.get(identifier);
     }
 
@@ -170,8 +180,10 @@ const verifyOtpHandler = async (req, res) => {
 
     if (!isMatch) {
       record.attempts = (record.attempts || 0) + 1;
-      if (getIsConnected()) {
-        await record.save();
+      if (getIsConnected() && typeof record.save === 'function') {
+        try {
+          await record.save();
+        } catch (_) {}
       }
       return res.status(400).json({
         success: false,
@@ -182,8 +194,10 @@ const verifyOtpHandler = async (req, res) => {
 
     // Mark OTP as verified
     record.verified = true;
-    if (getIsConnected()) {
-      await record.save();
+    if (getIsConnected() && typeof record.save === 'function') {
+      try {
+        await record.save();
+      } catch (_) {}
     }
 
     // Find or create User by email
@@ -191,34 +205,45 @@ const verifyOtpHandler = async (req, res) => {
     let isNewUser = false;
 
     if (getIsConnected()) {
-      user = await User.findOne({ email: identifier });
+      try {
+        user = await User.findOne({ email: identifier });
 
-      if (!user) {
-        user = await User.create({
-          phone: '',
-          email: identifier,
-          name: '',
-          avatar: identifier.charAt(0).toUpperCase() || 'A',
-          isProfileComplete: false,
-          dndEnabled: false,
-        });
-        isNewUser = true;
+        if (!user) {
+          user = await User.create({
+            phone: '',
+            email: identifier,
+            name: '',
+            avatar: identifier.charAt(0).toUpperCase() || 'A',
+            isProfileComplete: false,
+            dndEnabled: false,
+          });
+          isNewUser = true;
 
-        // Seed initial default DND profiles for this user
-        const defaultProfiles = devStore.getDefaultProfiles(user._id);
-        for (const p of defaultProfiles) {
-          const { _id, ...rest } = p;
-          await DndProfile.create(rest);
+          // Seed initial default DND profiles for this user
+          const defaultProfiles = devStore.getDefaultProfiles(user._id);
+          for (const p of defaultProfiles) {
+            const { _id, ...rest } = p;
+            try {
+              await DndProfile.create(rest);
+            } catch (_) {}
+          }
+
+          // Seed default rules
+          const defaultRules = devStore.getDefaultRules(user._id);
+          for (const r of defaultRules) {
+            const { _id, ...rest } = r;
+            try {
+              await DndRule.create(rest);
+            } catch (_) {}
+          }
         }
-
-        // Seed default rules
-        const defaultRules = devStore.getDefaultRules(user._id);
-        for (const r of defaultRules) {
-          const { _id, ...rest } = r;
-          await DndRule.create(rest);
-        }
+      } catch (dbErr) {
+        console.warn('[verifyOtpHandler] MongoDB User lookup/create failed, falling back:', dbErr.message);
+        user = null;
       }
-    } else {
+    }
+
+    if (!user) {
       // In-memory fallback
       for (const u of devStore.users.values()) {
         if (u.email === identifier) {
@@ -239,7 +264,6 @@ const verifyOtpHandler = async (req, res) => {
           isProfileComplete: false,
           dndEnabled: false,
         };
-        devStore.users.set(identifier, user);
         isNewUser = true;
 
         const defP = devStore.getDefaultProfiles(id);
@@ -252,6 +276,11 @@ const verifyOtpHandler = async (req, res) => {
         }
       }
     }
+
+    // Mirror user in memory store for zero-latency subsequent operations
+    const strUserId = (user._id || user.id).toString();
+    devStore.users.set(strUserId, user);
+    devStore.users.set(identifier, user);
 
     const token = generateToken({
       userId: user._id.toString(),

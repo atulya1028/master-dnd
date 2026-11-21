@@ -1,8 +1,11 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const DndProfile = require('../models/DndProfile');
 const DndRule = require('../models/DndRule');
 const { getIsConnected } = require('../config/db');
 const devStore = require('../utils/devStore');
+
+const isValidObjectId = (val) => Boolean(val && mongoose.Types.ObjectId.isValid(val));
 
 /**
  * GET /api/user/profile
@@ -13,8 +16,8 @@ const getProfileHandler = async (req, res) => {
     return res.status(200).json({
       success: true,
       user: {
-        id: user._id,
-        phone: user.phone,
+        id: user._id || user.id,
+        phone: user.phone || '',
         name: user.name || '',
         email: user.email || '',
         avatar: user.avatar || (user.name ? user.name[0].toUpperCase() : 'A'),
@@ -46,59 +49,62 @@ const getProfileHandler = async (req, res) => {
 const updateProfileHandler = async (req, res) => {
   try {
     const { name, email, avatar, bio, emergencyContacts, notificationPreferences } = req.body;
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
 
     let updatedUser = null;
 
-    if (getIsConnected()) {
-      const user = await User.findById(userId);
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
+        const user = await User.findById(userId);
+        if (user) {
+          if (name !== undefined) user.name = name.trim();
+          if (email !== undefined) user.email = email.trim().toLowerCase();
+          if (avatar !== undefined) user.avatar = avatar;
+          if (bio !== undefined) user.bio = bio;
+          if (emergencyContacts !== undefined) user.emergencyContacts = emergencyContacts;
+          if (notificationPreferences !== undefined) {
+            user.notificationPreferences = {
+              ...user.notificationPreferences,
+              ...notificationPreferences,
+            };
+          }
+          if (user.name && user.name.length > 0) {
+            user.isProfileComplete = true;
+          }
+          updatedUser = await user.save();
+        }
+      } catch (dbErr) {
+        console.warn('[updateProfileHandler] MongoDB update warning:', dbErr.message);
       }
+    }
 
-      if (name !== undefined) user.name = name.trim();
-      if (email !== undefined) user.email = email.trim().toLowerCase();
-      if (avatar !== undefined) user.avatar = avatar;
-      if (bio !== undefined) user.bio = bio;
-      if (emergencyContacts !== undefined) user.emergencyContacts = emergencyContacts;
+    // In-memory update / fallback
+    let devUser = devStore.users.get(userId);
+    if (!devUser && req.user) {
+      devUser = req.user;
+    }
+    if (devUser) {
+      if (name !== undefined) devUser.name = name.trim();
+      if (email !== undefined) devUser.email = email.trim().toLowerCase();
+      if (avatar !== undefined) devUser.avatar = avatar;
+      if (bio !== undefined) devUser.bio = bio;
+      if (emergencyContacts !== undefined) devUser.emergencyContacts = emergencyContacts;
       if (notificationPreferences !== undefined) {
-        user.notificationPreferences = {
-          ...user.notificationPreferences,
+        devUser.notificationPreferences = {
+          ...(devUser.notificationPreferences || {}),
           ...notificationPreferences,
         };
       }
-
-      // Mark profile complete if name is provided
-      if (user.name && user.name.length > 0) {
-        user.isProfileComplete = true;
+      if (devUser.name && devUser.name.length > 0) {
+        devUser.isProfileComplete = true;
       }
+      devUser.updatedAt = new Date().toISOString();
+      devStore.users.set(userId, devUser);
+      if (!updatedUser) updatedUser = devUser;
+    }
 
-      updatedUser = await user.save();
-    } else {
-      // DevStore fallback
-      const user = devStore.users.get(userId);
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
-      }
-
-      if (name !== undefined) user.name = name.trim();
-      if (email !== undefined) user.email = email.trim().toLowerCase();
-      if (avatar !== undefined) user.avatar = avatar;
-      if (bio !== undefined) user.bio = bio;
-      if (emergencyContacts !== undefined) user.emergencyContacts = emergencyContacts;
-      if (notificationPreferences !== undefined) {
-        user.notificationPreferences = {
-          ...(user.notificationPreferences || {}),
-          ...notificationPreferences,
-        };
-      }
-
-      if (user.name && user.name.length > 0) {
-        user.isProfileComplete = true;
-      }
-      user.updatedAt = new Date().toISOString();
-      devStore.users.set(userId, user);
-      updatedUser = user;
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     return res.status(200).json({
@@ -106,12 +112,12 @@ const updateProfileHandler = async (req, res) => {
       message: 'Profile updated successfully',
       isProfileComplete: Boolean(updatedUser.isProfileComplete),
       user: {
-        id: updatedUser._id,
-        phone: updatedUser.phone,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        avatar: updatedUser.avatar,
-        bio: updatedUser.bio,
+        id: updatedUser._id || updatedUser.id,
+        phone: updatedUser.phone || '',
+        name: updatedUser.name || '',
+        email: updatedUser.email || '',
+        avatar: updatedUser.avatar || 'A',
+        bio: updatedUser.bio || '',
         isProfileComplete: Boolean(updatedUser.isProfileComplete),
         dndEnabled: Boolean(updatedUser.dndEnabled),
         emergencyContacts: updatedUser.emergencyContacts || [],
@@ -122,7 +128,7 @@ const updateProfileHandler = async (req, res) => {
     console.error('[updateProfileHandler] Error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to update profile.',
+      message: 'Failed to update user profile.',
       error: error.message,
     });
   }
@@ -133,20 +139,24 @@ const updateProfileHandler = async (req, res) => {
  */
 const deleteAccountHandler = async (req, res) => {
   try {
-    const userId = req.user._id.toString();
+    const userId = (req.user._id || req.user.id).toString();
 
-    if (getIsConnected()) {
-      await User.findByIdAndDelete(userId);
-      await DndProfile.deleteMany({ userId });
-      await DndRule.deleteMany({ userId });
-    } else {
-      devStore.users.delete(userId);
-      for (const [id, p] of devStore.profiles.entries()) {
-        if (p.userId === userId) devStore.profiles.delete(id);
+    if (getIsConnected() && isValidObjectId(userId)) {
+      try {
+        await User.findByIdAndDelete(userId);
+        await DndProfile.deleteMany({ userId });
+        await DndRule.deleteMany({ userId });
+      } catch (dbErr) {
+        console.warn('[deleteAccountHandler] MongoDB delete warning:', dbErr.message);
       }
-      for (const [id, r] of devStore.rules.entries()) {
-        if (r.userId === userId) devStore.rules.delete(id);
-      }
+    }
+
+    devStore.users.delete(userId);
+    for (const [id, p] of devStore.profiles.entries()) {
+      if (p.userId === userId) devStore.profiles.delete(id);
+    }
+    for (const [id, r] of devStore.rules.entries()) {
+      if (r.userId === userId) devStore.rules.delete(id);
     }
 
     return res.status(200).json({

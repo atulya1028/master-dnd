@@ -19,7 +19,6 @@ const dndRuleSchema = new mongoose.Schema(
     },
     triggerType: {
       type: String,
-      enum: ['schedule', 'calendar', 'driving', 'location', 'app'],
       default: 'schedule',
     },
     active: {
