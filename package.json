@@ -4,6 +4,8 @@
   "description": "Master DND full-stack application",
   "private": true,
   "scripts": {
+    "postinstall": "cd backend && npm install",
+    "start": "node backend/server.js",
     "web": "./run_web.sh",
     "backend": "cd backend && npm run dev",
     "test:backend": "node scratch/final_qa_test.js",
