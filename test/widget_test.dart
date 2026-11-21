@@ -164,6 +164,37 @@ void main() {
       expect(toggled, isTrue);
     });
 
+    testWidgets('HomeScreen renders custom time chip and diagnostics button', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>(create: (_) => AuthBloc()),
+            BlocProvider<DndBloc>(create: (_) => DndBloc()),
+          ],
+          child: MaterialApp(
+            theme: dayTheme,
+            home: Scaffold(
+              body: HomeScreen(
+                dndOn: false,
+                onToggle: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Set time'), findsOneWidget);
+      expect(find.byTooltip('System Status & Diagnostics'), findsOneWidget);
+
+      // Open diagnostics sheet
+      await tester.tap(find.byTooltip('System Status & Diagnostics'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('System Status & Diagnostics'), findsOneWidget);
+      expect(find.text('Microsoft Azure Cloud Backend'), findsOneWidget);
+      expect(find.text('MongoDB Database Cluster'), findsOneWidget);
+      expect(find.text('Zoho Mail SMTP OTP Engine'), findsOneWidget);
+    });
+
     testWidgets('InsightsScreen renders headers and range chips', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(

@@ -26,6 +26,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
   late String _callWhitelist;
   late String _messageWhitelist;
   late int _repeatCallersWindow;
+  late String _meta;
 
   static const List<IconData> _selectableIcons = [
     DndIcons.moon,
@@ -51,6 +52,34 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
     _callWhitelist = p?.callWhitelist ?? 'Starred';
     _messageWhitelist = p?.messageWhitelist ?? 'VIP only';
     _repeatCallersWindow = p?.repeatCallersWindowMin ?? 15;
+    _meta = p?.meta.isNotEmpty == true ? p!.meta : '10:00 PM – 7:00 AM';
+  }
+
+  static String _formatTime(TimeOfDay time) {
+    final hourOfPeriod = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minuteStr = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hourOfPeriod:$minuteStr $period';
+  }
+
+  Future<void> _pickScheduleTimes() async {
+    final start = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 22, minute: 0),
+      helpText: 'SELECT PROFILE START TIME',
+    );
+    if (start == null || !mounted) return;
+
+    final end = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 7, minute: 0),
+      helpText: 'SELECT PROFILE END TIME',
+    );
+    if (end == null || !mounted) return;
+
+    setState(() {
+      _meta = '${_formatTime(start)} – ${_formatTime(end)}';
+    });
   }
 
   @override
@@ -74,6 +103,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
         .copyWith(
       name: name,
       icon: _icon,
+      meta: _meta,
       mode: modeEnum,
       autoReply: _autoReply,
       hideNotifications: _hideNotifications,
@@ -299,6 +329,18 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                     labels: const ['Total silence', 'Priority only', 'Alarms only', 'Custom'],
                     selected: _mode,
                     onSelected: (i) => setState(() => _mode = i),
+                  ),
+                  const SizedBox(height: Space.s16),
+                  const OverlineText('Active Schedule Hours'),
+                  const SizedBox(height: Space.s8),
+                  DndCard(
+                    child: SettingRow(
+                      icon: DndIcons.clock,
+                      title: 'Schedule Hours',
+                      subtitle: 'Tap to pick custom active hours',
+                      value: _meta,
+                      onTap: _pickScheduleTimes,
+                    ),
                   ),
                   const SizedBox(height: Space.s16),
                   const OverlineText('Who gets through'),

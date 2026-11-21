@@ -83,12 +83,32 @@ class _RulesScreenState extends State<RulesScreen> {
     }
   }
 
+  static String _formatTimeOfDay(TimeOfDay time) {
+    final hourOfPeriod = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minuteStr = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hourOfPeriod:$minuteStr $period';
+  }
+
   void _showAddRuleDialog() {
     final titleController = TextEditingController();
-    final subtitleController = TextEditingController();
+    final subtitleController = TextEditingController(text: '10:00 PM – 7:00 AM (Mon - Fri)');
     int selectedTypeIndex = 0;
     final types = ['schedule', 'location', 'wifi', 'calendar'];
     final typeLabels = ['Time', 'Places', 'Wi-Fi', 'Calendar'];
+
+    TimeOfDay startTime = const TimeOfDay(hour: 22, minute: 0);
+    TimeOfDay endTime = const TimeOfDay(hour: 7, minute: 0);
+    int selectedDayPreset = 1; // 0: Every day, 1: Weekdays, 2: Weekends
+
+    void updateScheduleText() {
+      final daysText = switch (selectedDayPreset) {
+        0 => 'Every day',
+        1 => 'Mon - Fri',
+        _ => 'Sat - Sun',
+      };
+      subtitleController.text = '${_formatTimeOfDay(startTime)} – ${_formatTimeOfDay(endTime)} ($daysText)';
+    }
 
     showModalBottomSheet<void>(
       context: context,
@@ -107,82 +127,310 @@ class _RulesScreenState extends State<RulesScreen> {
                 top: Space.s24,
                 bottom: MediaQuery.of(modalCtx).viewInsets.bottom + Space.s24,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Create New Rule', style: modalCtx.text.titleLarge),
-                  const SizedBox(height: Space.s16),
-                  const OverlineText('Rule Title'),
-                  const SizedBox(height: Space.s8),
-                  DndCard(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                      child: TextField(
-                        controller: titleController,
-                        style: modalCtx.text.titleMedium,
-                        decoration: const InputDecoration(
-                          hintText: 'e.g. Study Hours or Gym',
-                          border: InputBorder.none,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Create New Rule', style: modalCtx.text.titleLarge),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Rule Title'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: titleController,
+                          style: modalCtx.text.titleMedium,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. Bedtime Quiet or Study Hours',
+                            border: InputBorder.none,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: Space.s16),
-                  const OverlineText('Trigger Condition / Schedule'),
-                  const SizedBox(height: Space.s8),
-                  DndCard(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
-                      child: TextField(
-                        controller: subtitleController,
-                        style: modalCtx.text.titleMedium,
-                        decoration: const InputDecoration(
-                          hintText: 'e.g. Mon to Fri 4:00 PM to 7:00 PM',
-                          border: InputBorder.none,
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Trigger Type'),
+                    const SizedBox(height: Space.s8),
+                    ChipRow(
+                      labels: typeLabels,
+                      selected: selectedTypeIndex,
+                      onSelected: (i) {
+                        setModalState(() {
+                          selectedTypeIndex = i;
+                          if (i == 0) {
+                            updateScheduleText();
+                          } else if (i == 1) {
+                            subtitleController.text = 'When arriving at Office';
+                          } else if (i == 2) {
+                            subtitleController.text = 'Connected to Home Wi-Fi';
+                          } else {
+                            subtitleController.text = 'During "Busy" calendar events';
+                          }
+                        });
+                      },
+                    ),
+                    const SizedBox(height: Space.s16),
+                    if (selectedTypeIndex == 0) ...[
+                      const OverlineText('Set Schedule Hours'),
+                      const SizedBox(height: Space.s8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.access_time, size: 16),
+                              label: Text('Start: ${_formatTimeOfDay(startTime)}'),
+                              onPressed: () async {
+                                final picked = await showTimePicker(
+                                  context: modalCtx,
+                                  initialTime: startTime,
+                                  helpText: 'SELECT START TIME',
+                                );
+                                if (picked != null) {
+                                  setModalState(() {
+                                    startTime = picked;
+                                    updateScheduleText();
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: Space.s8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.access_time_filled, size: 16),
+                              label: Text('End: ${_formatTimeOfDay(endTime)}'),
+                              onPressed: () async {
+                                final picked = await showTimePicker(
+                                  context: modalCtx,
+                                  initialTime: endTime,
+                                  helpText: 'SELECT END TIME',
+                                );
+                                if (picked != null) {
+                                  setModalState(() {
+                                    endTime = picked;
+                                    updateScheduleText();
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: Space.s8),
+                      ChipRow(
+                        labels: const ['Every day', 'Weekdays', 'Weekends'],
+                        selected: selectedDayPreset,
+                        onSelected: (i) {
+                          setModalState(() {
+                            selectedDayPreset = i;
+                            updateScheduleText();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: Space.s16),
+                    ],
+                    const OverlineText('Trigger Condition / Schedule Description'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: subtitleController,
+                          style: modalCtx.text.titleMedium,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. 10:00 PM – 7:00 AM (Mon - Fri)',
+                            border: InputBorder.none,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: Space.s16),
-                  const OverlineText('Trigger Type'),
-                  const SizedBox(height: Space.s8),
-                  ChipRow(
-                    labels: typeLabels,
-                    selected: selectedTypeIndex,
-                    onSelected: (i) => setModalState(() => selectedTypeIndex = i),
-                  ),
-                  const SizedBox(height: Space.s24),
-                  AppButton('Create Rule', onPressed: () async {
-                    final title = titleController.text.trim();
-                    if (title.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a rule title')),
-                      );
-                      return;
-                    }
+                    const SizedBox(height: Space.s24),
+                    AppButton('Create Rule', onPressed: () async {
+                      final title = titleController.text.trim();
+                      if (title.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter a rule title')),
+                        );
+                        return;
+                      }
 
-                    final newRule = DndRule(
-                      title: title,
-                      subtitle: subtitleController.text.trim().isNotEmpty
-                          ? subtitleController.text.trim()
-                          : 'Trigger: ${typeLabels[selectedTypeIndex]}',
-                      triggerType: types[selectedTypeIndex],
-                      active: true,
-                    );
-
-                    Navigator.of(modalCtx).pop();
-                    final created = await ApiService.instance.createRule(newRule);
-                    if (created != null && mounted) {
-                      setState(() => _rules.add(created));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Rule "$title" created successfully')),
+                      final newRule = DndRule(
+                        title: title,
+                        subtitle: subtitleController.text.trim().isNotEmpty
+                            ? subtitleController.text.trim()
+                            : 'Trigger: ${typeLabels[selectedTypeIndex]}',
+                        triggerType: types[selectedTypeIndex],
+                        active: true,
                       );
-                    } else {
-                      _fetchRules();
-                    }
-                  }),
-                ],
+
+                      Navigator.of(modalCtx).pop();
+                      final created = await ApiService.instance.createRule(newRule);
+                      if (created != null && mounted) {
+                        setState(() => _rules.add(created));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Rule "$title" created successfully')),
+                        );
+                      } else {
+                        _fetchRules();
+                      }
+                    }),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditRuleDialog(DndRule rule) {
+    final titleController = TextEditingController(text: rule.title);
+    final subtitleController = TextEditingController(text: rule.subtitle);
+    TimeOfDay startTime = const TimeOfDay(hour: 22, minute: 0);
+    TimeOfDay endTime = const TimeOfDay(hour: 7, minute: 0);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.dnd.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.card)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: Space.s24,
+                right: Space.s24,
+                top: Space.s24,
+                bottom: MediaQuery.of(modalCtx).viewInsets.bottom + Space.s24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: Text('Edit Rule', style: modalCtx.text.titleLarge)),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline, color: modalCtx.dnd.critical),
+                          tooltip: 'Delete Rule',
+                          onPressed: () {
+                            Navigator.of(modalCtx).pop();
+                            _deleteRule(rule);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Rule Title'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: titleController,
+                          style: modalCtx.text.titleMedium,
+                          decoration: const InputDecoration(border: InputBorder.none),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Pick Schedule Times'),
+                    const SizedBox(height: Space.s8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.access_time, size: 16),
+                            label: Text('Start: ${_formatTimeOfDay(startTime)}'),
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: modalCtx,
+                                initialTime: startTime,
+                                helpText: 'SELECT START TIME',
+                              );
+                              if (picked != null) {
+                                setModalState(() {
+                                  startTime = picked;
+                                  subtitleController.text =
+                                      '${_formatTimeOfDay(startTime)} – ${_formatTimeOfDay(endTime)}';
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: Space.s8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.access_time_filled, size: 16),
+                            label: Text('End: ${_formatTimeOfDay(endTime)}'),
+                            onPressed: () async {
+                              final picked = await showTimePicker(
+                                context: modalCtx,
+                                initialTime: endTime,
+                                helpText: 'SELECT END TIME',
+                              );
+                              if (picked != null) {
+                                setModalState(() {
+                                  endTime = picked;
+                                  subtitleController.text =
+                                      '${_formatTimeOfDay(startTime)} – ${_formatTimeOfDay(endTime)}';
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Schedule / Trigger Condition'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: subtitleController,
+                          style: modalCtx.text.titleMedium,
+                          decoration: const InputDecoration(border: InputBorder.none),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Space.s24),
+                    AppButton('Save Changes', onPressed: () async {
+                      final newTitle = titleController.text.trim();
+                      final newSub = subtitleController.text.trim();
+                      if (newTitle.isEmpty) return;
+
+                      Navigator.of(modalCtx).pop();
+                      setState(() {
+                        _rules = [
+                          for (final r in _rules)
+                            if (r.id == rule.id)
+                              r.copyWith(title: newTitle, subtitle: newSub)
+                            else
+                              r,
+                        ];
+                      });
+
+                      await ApiService.instance.updateRule(
+                        rule.id,
+                        title: newTitle,
+                        subtitle: newSub,
+                      );
+
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Rule "$newTitle" updated successfully')),
+                        );
+                      }
+                    }),
+                  ],
+                ),
               ),
             );
           },
@@ -260,7 +508,7 @@ class _RulesScreenState extends State<RulesScreen> {
                   for (var i = 0; i < rules.length; i++) ...[
                     if (i > 0) const DndDivider(),
                     InkWell(
-                      onTap: () => _toggleRule(rules[i], !rules[i].active),
+                      onTap: () => _showEditRuleDialog(rules[i]),
                       onLongPress: () => _deleteRule(rules[i]),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 12),
@@ -276,6 +524,11 @@ class _RulesScreenState extends State<RulesScreen> {
                                   Text(rules[i].subtitle, style: context.text.bodySmall),
                                 ],
                               ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              tooltip: 'Edit Schedule',
+                              onPressed: () => _showEditRuleDialog(rules[i]),
                             ),
                             Switch(
                               value: rules[i].active,

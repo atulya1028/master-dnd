@@ -570,4 +570,44 @@ class ApiService {
     }
     return InsightsData.defaults();
   }
+
+  // -------------------------------------------------------------
+  // SYSTEM HEALTH & DIAGNOSTICS
+  // -------------------------------------------------------------
+
+  Future<Map<String, dynamic>> checkSystemHealth() async {
+    final activeBase = await resolveBaseUrl();
+    final healthUri = Uri.parse(activeBase.replaceAll('/api', '/api/health'));
+    final stopwatch = Stopwatch()..start();
+    try {
+      final res = await http.get(healthUri).timeout(const Duration(seconds: 4));
+      stopwatch.stop();
+      if (res.statusCode == 200) {
+        final data = _safeDecodeJson(res.body, res.statusCode);
+        return {
+          'online': true,
+          'latencyMs': stopwatch.elapsedMilliseconds,
+          'status': data['status'] ?? 'healthy',
+          'service': data['service'] ?? 'Master DND API',
+          'version': data['version'] ?? '1.0.0',
+          'environment': data['environment'] ?? 'production',
+          'baseUrl': activeBase,
+        };
+      }
+      return {
+        'online': false,
+        'latencyMs': stopwatch.elapsedMilliseconds,
+        'status': 'http_${res.statusCode}',
+        'baseUrl': activeBase,
+      };
+    } catch (e) {
+      stopwatch.stop();
+      return {
+        'online': false,
+        'latencyMs': stopwatch.elapsedMilliseconds,
+        'error': e.toString(),
+        'baseUrl': activeBase,
+      };
+    }
+  }
 }
