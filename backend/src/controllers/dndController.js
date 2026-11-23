@@ -519,10 +519,7 @@ const getInsightsHandler = async (req, res) => {
           focusHours: 36,
           blockedTotal: 96,
         },
-        letThroughContacts: [
-          { initial: 'D', name: 'Dr. Rao', detail: 'Call at 10:45 PM, repeat caller' },
-          { initial: 'S', name: 'Sarah Work', detail: 'Message at 11:30 PM, VIP contact' },
-        ],
+        letThroughContacts: [],
         breakdown: [
           { day: 'Mon', silenced: 16, allowed: 1, hours: 5.2 },
           { day: 'Tue', silenced: 13, allowed: 0, hours: 4.8 },
@@ -554,11 +551,7 @@ const getInsightsHandler = async (req, res) => {
           focusHours: 138,
           blockedTotal: 348,
         },
-        letThroughContacts: [
-          { initial: 'M', name: 'Mom', detail: 'Call at 11:12 PM, VIP contact' },
-          { initial: 'D', name: 'Dr. Rao', detail: 'Call at 11:19 PM, repeat caller' },
-          { initial: 'E', name: 'Emergency Hotline', detail: 'Call at 2:10 AM, bypassed' },
-        ],
+        letThroughContacts: [],
         breakdown: [
           { day: 'Week 1', silenced: 84, allowed: 6, hours: 31.0 },
           { day: 'Week 2', silenced: 96, allowed: 8, hours: 36.0 },
@@ -586,10 +579,7 @@ const getInsightsHandler = async (req, res) => {
         focusHours: 31,
         blockedTotal: 84,
       },
-      letThroughContacts: [
-        { initial: 'M', name: 'Mom', detail: 'Call at 11:12 PM, VIP contact' },
-        { initial: 'D', name: 'Dr. Rao', detail: 'Call at 11:19 PM, repeat caller' },
-      ],
+      letThroughContacts: [],
       breakdown: [
         { day: 'Mon', silenced: 14, allowed: 1, hours: 4.5 },
         { day: 'Tue', silenced: 11, allowed: 3, hours: 5.0 },

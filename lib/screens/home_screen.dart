@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../bloc/auth/auth_bloc.dart';
 import '../bloc/dnd/dnd_bloc.dart';
@@ -25,6 +27,183 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _durationIndex = 1;
   TimeOfDay _customEndTime = const TimeOfDay(hour: 6, minute: 30);
+  static const _allowedContactsKey = 'master_dnd_allowed_contacts';
+  List<LetThroughContact> _allowedContacts = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllowedContacts();
+  }
+
+  Future<void> _loadAllowedContacts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_allowedContactsKey);
+      if (raw != null) {
+        setState(() {
+          _allowedContacts = raw
+              .map((item) => LetThroughContact.fromJson(jsonDecode(item) as Map<String, dynamic>))
+              .toList();
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveAllowedContacts() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _allowedContacts.map((c) => jsonEncode(c.toJson())).toList();
+      await prefs.setStringList(_allowedContactsKey, list);
+    } catch (_) {}
+  }
+
+  Future<void> _showAddContactDialog(BuildContext context) async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    int selectedTagIndex = 0;
+    final tags = const ['VIP Contact', 'Family', 'Doctor / Emergency', 'Repeat Caller', 'Work Priority'];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.dnd.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.card)),
+      ),
+      builder: (modalCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            final c = ctx.dnd;
+            return Padding(
+              padding: EdgeInsets.only(
+                left: Space.s24,
+                right: Space.s24,
+                top: Space.s24,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + Space.s24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.person_add_alt_1, color: c.accent, size: 26),
+                        const SizedBox(width: Space.s12),
+                        Expanded(
+                          child: Text('Add Allowed Contact', style: ctx.text.titleLarge),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Contact Name'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: nameCtrl,
+                          autofocus: true,
+                          style: ctx.text.titleMedium,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. Papa, Sarah, Emergency',
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Phone Number (Optional)'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          style: ctx.text.titleMedium,
+                          decoration: const InputDecoration(
+                            hintText: 'e.g. +91 98765 43210',
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Permission Rule / Category'),
+                    const SizedBox(height: Space.s8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < tags.length; i++) ...[
+                            if (i > 0) const SizedBox(width: Space.s8),
+                            ChoiceChip(
+                              label: Text(tags[i]),
+                              selected: selectedTagIndex == i,
+                              onSelected: (_) => setModalState(() => selectedTagIndex = i),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: Space.s24),
+                    AppButton('Save Allowed Contact', onPressed: () async {
+                      final name = nameCtrl.text.trim();
+                      if (name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please enter contact name')),
+                        );
+                        return;
+                      }
+
+                      final phone = phoneCtrl.text.trim();
+                      final tag = tags[selectedTagIndex];
+                      final detail = phone.isNotEmpty ? '$tag • $phone' : tag;
+                      final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+                      final newContact = LetThroughContact(
+                        initial: initial,
+                        name: name,
+                        detail: detail,
+                        phone: phone,
+                      );
+
+                      setState(() {
+                        _allowedContacts.add(newContact);
+                      });
+                      await _saveAllowedContacts();
+
+                      if (modalCtx.mounted) Navigator.of(modalCtx).pop();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$name added to allowed contacts')),
+                        );
+                      }
+                    }),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _removeContact(int index) async {
+    final contact = _allowedContacts[index];
+    setState(() {
+      _allowedContacts.removeAt(index);
+    });
+    await _saveAllowedContacts();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${contact.name} removed from allowed contacts')),
+      );
+    }
+  }
 
   String _formatTimeOfDay(TimeOfDay time) {
     final hourOfPeriod = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
@@ -277,7 +456,64 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      const SizedBox(height: Space.s16),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const OverlineText('Allowed VIP Contacts'),
+          TextButton.icon(
+            icon: Icon(Icons.add, size: 16, color: c.accent),
+            label: Text('Add', style: context.text.labelLarge?.copyWith(color: c.accent)),
+            onPressed: () => _showAddContactDialog(context),
+          ),
+        ],
+      ),
+      const SizedBox(height: Space.s8),
+      DndCard(
+        child: SettingRow(
+          icon: DndIcons.users,
+          title: 'VIP & Allowed Contacts',
+          subtitle: _allowedContacts.isEmpty
+              ? 'No contacts added yet • Tap to add VIP contacts'
+              : '${_allowedContacts.length} contact${_allowedContacts.length > 1 ? 's' : ''} allowed to ring through',
+          value: _allowedContacts.isEmpty ? 'Add' : '${_allowedContacts.length}',
+          onTap: () => _showAddContactDialog(context),
+        ),
+      ),
     ];
+  }
+
+  Widget _contactItem(BuildContext context, LetThroughContact item, VoidCallback onRemove) {
+    final c = context.dnd;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: Space.s8),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: c.accentTint,
+            child: Text(item.initial, style: context.text.labelLarge!.copyWith(color: c.accent)),
+          ),
+          const SizedBox(width: Space.s12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.name, style: context.text.labelLarge),
+                Text(item.detail, style: context.text.bodySmall),
+              ],
+            ),
+          ),
+          Icon(DndIcons.phone, size: 20, color: c.armed),
+          const SizedBox(width: Space.s4),
+          IconButton(
+            icon: Icon(Icons.close, size: 18, color: c.textSecondary),
+            tooltip: 'Remove',
+            onPressed: onRemove,
+          ),
+        ],
+      ),
+    );
   }
 
   List<Widget> _onContent(BuildContext context) {
@@ -294,48 +530,55 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
 
-    Widget contact(String initial, String name, String detail) => InkWell(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$name: Allowed through ($detail)'),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: Space.s12),
-            child: Row(children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: c.accentTint,
-                child: Text(initial, style: context.text.labelLarge!.copyWith(color: c.accent)),
-              ),
-              const SizedBox(width: Space.s12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name, style: context.text.labelLarge),
-                  Text(detail, style: context.text.bodySmall),
-                ]),
-              ),
-              Icon(DndIcons.phone, size: 20, color: c.armed),
-            ]),
-          ),
-        );
-
     return [
       Row(children: [
         tile('12', 'Silenced tonight'),
         const SizedBox(width: Space.s12),
-        tile('2', 'Let through'),
+        tile('${_allowedContacts.length}', 'Let through'),
       ]),
       const SizedBox(height: Space.s24),
-      const OverlineText('Let through by your rules'),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const OverlineText('Let through by your rules'),
+          TextButton.icon(
+            icon: Icon(Icons.person_add_alt_1, size: 16, color: c.accent),
+            label: Text('Add VIP', style: context.text.labelLarge?.copyWith(color: c.accent)),
+            onPressed: () => _showAddContactDialog(context),
+          ),
+        ],
+      ),
       const SizedBox(height: Space.s8),
-      DndGroup(children: [
-        contact('M', 'Mom', 'Call at 11:12 PM, VIP contact'),
-        contact('D', 'Dr. Rao', 'Call at 11:19 PM, repeat caller'),
-      ]),
+      if (_allowedContacts.isEmpty)
+        DndCard(
+          child: Padding(
+            padding: const EdgeInsets.all(Space.s24),
+            child: Column(
+              children: [
+                Icon(Icons.people_outline, size: 36, color: c.textSecondary),
+                const SizedBox(height: Space.s8),
+                Text('No allowed contacts yet', style: context.text.titleMedium),
+                const SizedBox(height: Space.s4),
+                Text(
+                  'Add VIP contacts who can call or text through during Do Not Disturb.',
+                  textAlign: TextAlign.center,
+                  style: context.text.bodySmall?.copyWith(color: c.textSecondary),
+                ),
+                const SizedBox(height: Space.s16),
+                AppButton(
+                  'Add Allowed Contact',
+                  type: AppButtonType.secondary,
+                  onPressed: () => _showAddContactDialog(context),
+                ),
+              ],
+            ),
+          ),
+        )
+      else
+        DndGroup(children: [
+          for (var i = 0; i < _allowedContacts.length; i++)
+            _contactItem(context, _allowedContacts[i], () => _removeContact(i)),
+        ]),
       const SizedBox(height: Space.s16),
       Row(children: [
         Expanded(

@@ -313,17 +313,30 @@ class LetThroughContact {
     required this.initial,
     required this.name,
     required this.detail,
+    this.phone = '',
   });
 
   final String initial;
   final String name;
   final String detail;
+  final String phone;
+
+  Map<String, dynamic> toJson() => {
+        'initial': initial,
+        'name': name,
+        'detail': detail,
+        'phone': phone,
+      };
 
   factory LetThroughContact.fromJson(Map<String, dynamic> json) {
+    final n = json['name']?.toString() ?? 'Contact';
+    final init = json['initial']?.toString() ??
+        (n.isNotEmpty ? n[0].toUpperCase() : 'U');
     return LetThroughContact(
-      initial: json['initial']?.toString() ?? 'U',
-      name: json['name']?.toString() ?? 'Contact',
-      detail: json['detail']?.toString() ?? '',
+      initial: init,
+      name: n,
+      detail: json['detail']?.toString() ?? 'VIP contact',
+      phone: json['phone']?.toString() ?? '',
     );
   }
 }
@@ -410,10 +423,7 @@ class InsightsData {
   static InsightsData defaults() => const InsightsData(
         range: 'this_week',
         stats: InsightsStats(),
-        letThroughContacts: [
-          LetThroughContact(initial: 'M', name: 'Mom', detail: 'Call at 11:12 PM, VIP contact'),
-          LetThroughContact(initial: 'D', name: 'Dr. Rao', detail: 'Call at 11:19 PM, repeat caller'),
-        ],
+        letThroughContacts: [],
         breakdown: [
           DailyBreakdown(day: 'Mon', silenced: 14, allowed: 1, hours: 4.5),
           DailyBreakdown(day: 'Tue', silenced: 11, allowed: 3, hours: 5.0),

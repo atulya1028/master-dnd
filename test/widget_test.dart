@@ -195,6 +195,40 @@ void main() {
       expect(find.text('Zoho Mail SMTP OTP Engine'), findsOneWidget);
     });
 
+    testWidgets('HomeScreen on state has no hardcoded Mom/Dr. Rao and allows adding VIP contacts', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>(create: (_) => AuthBloc()),
+            BlocProvider<DndBloc>(create: (_) => DndBloc()),
+          ],
+          child: MaterialApp(
+            theme: dayTheme,
+            home: Scaffold(
+              body: HomeScreen(
+                dndOn: true,
+                onToggle: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Verify Mom and Dr. Rao are NOT present
+      expect(find.text('Mom'), findsNothing);
+      expect(find.text('Dr. Rao'), findsNothing);
+
+      // Verify empty state and Add VIP button exist
+      expect(find.text('No allowed contacts yet'), findsOneWidget);
+      expect(find.text('Add VIP'), findsOneWidget);
+
+      // Tap Add VIP button to open dialog
+      await tester.tap(find.text('Add VIP'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add Allowed Contact'), findsAtLeastNWidgets(1));
+      expect(find.text('Save Allowed Contact'), findsOneWidget);
+    });
+
     testWidgets('InsightsScreen renders headers and range chips', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
