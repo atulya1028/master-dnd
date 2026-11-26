@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import '../core/api_service.dart';
 import '../core/models.dart';
 import '../core/tokens.dart';
+import '../widgets/log_session_sheet.dart';
 import '../widgets/widgets.dart';
+import 'stability_report_screen.dart';
 
-/// Figma: "7 Insights". Data comes from GET /api/dnd/insights?range=...
+/// Figma: "7 Insights". Dynamically driven by GET /api/dnd/insights?range=...
 class InsightsScreen extends StatefulWidget {
-  const InsightsScreen({super.key});
+  const InsightsScreen({super.key, this.onOpenStabilityReport});
+
+  final VoidCallback? onOpenStabilityReport;
 
   @override
   State<InsightsScreen> createState() => _InsightsScreenState();
@@ -16,7 +20,7 @@ class InsightsScreen extends StatefulWidget {
 class _InsightsScreenState extends State<InsightsScreen> {
   int _range = 0;
   bool _isLoading = true;
-  InsightsData _data = InsightsData.defaults();
+  InsightsData _data = InsightsData.empty();
 
   static const List<String> _rangeLabels = ['This week', 'Last week', 'Month'];
 
@@ -47,20 +51,32 @@ class _InsightsScreenState extends State<InsightsScreen> {
     _fetchInsights(index);
   }
 
+  Future<void> _handleLogSession() async {
+    final saved = await showLogSessionSheet(context);
+    if (saved && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session saved to database')),
+      );
+      _fetchInsights(_range);
+    }
+  }
+
+  void _openReport() {
+    if (widget.onOpenStabilityReport != null) {
+      widget.onOpenStabilityReport!();
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const Scaffold(body: SafeArea(child: StabilityReportScreen()))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.dnd;
     final breakdown = _data.breakdown.isNotEmpty
         ? _data.breakdown
-        : const [
-            DailyBreakdown(day: 'Mon', silenced: 14, allowed: 1, hours: 4.5),
-            DailyBreakdown(day: 'Tue', silenced: 11, allowed: 3, hours: 5.0),
-            DailyBreakdown(day: 'Wed', silenced: 15, allowed: 0, hours: 3.8),
-            DailyBreakdown(day: 'Thu', silenced: 12, allowed: 2, hours: 5.6),
-            DailyBreakdown(day: 'Fri', silenced: 9, allowed: 4, hours: 4.4),
-            DailyBreakdown(day: 'Sat', silenced: 16, allowed: 1, hours: 4.2),
-            DailyBreakdown(day: 'Sun', silenced: 12, allowed: 2, hours: 3.5),
-          ];
+        : InsightsData.empty().breakdown;
 
     final maxHours = breakdown.fold<double>(1.0, (m, b) => b.hours > m ? b.hours : m);
 
@@ -89,7 +105,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                 child: Stack(children: [
                   Positioned.fill(child: ColoredBox(color: c.surfaceAlt)),
                   FractionallySizedBox(
-                    widthFactor: fraction.clamp(0.05, 1.0),
+                    widthFactor: fraction.clamp(0.0, 1.0),
                     child: ColoredBox(color: c.accent),
                   ),
                 ]),
@@ -110,7 +126,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
     final topProfile = _data.profiles.isNotEmpty
         ? _data.profiles.first
-        : const ProfileStat(name: 'Sleep', hours: 18, fraction: 1.0);
+        : const ProfileStat(name: 'None yet', hours: 0, fraction: 0);
 
     final letThroughCount = _data.stats.letThroughTonight;
 
@@ -119,7 +135,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(Space.s24, Space.s16, Space.s24, Space.s24),
         children: [
-          ScreenHeader(title: 'Insights', subtitle: rangeSubtitle),
+          ScreenHeader(
+            title: 'Insights',
+            subtitle: rangeSubtitle,
+            onAdd: _handleLogSession,
+          ),
           const SizedBox(height: Space.s16),
           ChipRow(
             labels: _rangeLabels,
@@ -137,43 +157,78 @@ class _InsightsScreenState extends State<InsightsScreen> {
             child: Padding(
               padding: const EdgeInsets.all(Space.s16),
               child: Column(children: [
-                Row(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const OverlineText('Focus time'),
-                    Text('${_data.stats.focusHours} h', style: context.text.displayLarge),
-                  ]),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    const OverlineText('Blocked'),
-                    Text('${_data.stats.blockedTotal}', style: context.text.titleLarge),
-                  ]),
-                ]),
-                const SizedBox(height: Space.s16),
-                Row(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  for (var i = 0; i < breakdown.length; i++)
-                    Column(mainAxisSize: MainAxisSize.min, children: [
-                      Container(
-                        width: breakdown.length > 5 ? 28 : 50,
-                        height: (96 * (breakdown[i].hours / maxHours)).clamp(12.0, 96.0),
-                        decoration: BoxDecoration(
-                          color: i == breakdown.length - 2
-                              ? c.accent
-                              : c.accent.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(Radii.input),
-                        ),
-                      ),
-                      const SizedBox(height: Space.s8),
-                      Text(
-                        breakdown[i].day,
-                        style: context.text.bodySmall!.copyWith(
-                          color: i == breakdown.length - 2 ? c.textPrimary : c.textSecondary,
-                        ),
-                      ),
+                Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const OverlineText('Focus time'),
+                        Text('${_data.stats.focusHours} h', style: context.text.displayLarge),
+                      ]),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        const OverlineText('Blocked'),
+                        Text('${_data.stats.blockedTotal}', style: context.text.titleLarge),
+                      ]),
                     ]),
-                ]),
+                const SizedBox(height: Space.s16),
+                Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (var i = 0; i < breakdown.length; i++)
+                        Column(mainAxisSize: MainAxisSize.min, children: [
+                          Container(
+                            width: breakdown.length > 5 ? 28 : 50,
+                            height: breakdown[i].hours <= 0
+                                ? 8.0
+                                : (96 * (breakdown[i].hours / maxHours)).clamp(12.0, 96.0),
+                            decoration: BoxDecoration(
+                              color: breakdown[i].hours <= 0
+                                  ? c.surfaceAlt
+                                  : (i == breakdown.length - 1
+                                      ? c.accent
+                                      : c.accent.withValues(alpha: 0.45)),
+                              borderRadius: BorderRadius.circular(Radii.input),
+                            ),
+                          ),
+                          const SizedBox(height: Space.s8),
+                          Text(
+                            breakdown[i].day,
+                            style: context.text.bodySmall!.copyWith(
+                              color: i == breakdown.length - 1 ? c.textPrimary : c.textSecondary,
+                            ),
+                          ),
+                        ]),
+                    ]),
               ]),
             ),
           ),
           const SizedBox(height: Space.s16),
+          if (!_data.hasData) ...[
+            DndCard(
+              child: Padding(
+                padding: const EdgeInsets.all(Space.s16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('No activity recorded in this window yet', style: context.text.labelLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Arm Master DND on Home or manually log a quiet session to populate live analytics.',
+                      style: context.text.bodySmall,
+                    ),
+                    const SizedBox(height: Space.s12),
+                    AppButton(
+                      'Log Session Manually',
+                      type: AppButtonType.secondary,
+                      onPressed: _handleLogSession,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: Space.s16),
+          ],
           Row(children: [
             statTile(
               'Top profile',
@@ -189,12 +244,28 @@ class _InsightsScreenState extends State<InsightsScreen> {
           ]),
           const SizedBox(height: Space.s16),
           DndCard(
+            child: SettingRow(
+              icon: Icons.analytics_outlined,
+              title: 'Overall Stability Analysis Report',
+              subtitle: 'View stability score, adherence, streak & app usage trends',
+              value: 'Open',
+              onTap: _openReport,
+            ),
+          ),
+          const SizedBox(height: Space.s16),
+          DndCard(
             child: Padding(
               padding: const EdgeInsets.all(Space.s16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('By profile', style: context.text.labelLarge),
-                for (final prof in _data.profiles)
-                  profileBar(prof.name, prof.hours, prof.fraction),
+                if (_data.profiles.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: Space.s12),
+                    child: Text('No profile hours logged yet', style: context.text.bodySmall),
+                  )
+                else
+                  for (final prof in _data.profiles)
+                    profileBar(prof.name, prof.hours, prof.fraction),
               ]),
             ),
           ),

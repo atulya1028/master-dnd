@@ -18,6 +18,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
     on<AuthCompleteProfileRequested>(_onCompleteProfileRequested);
     on<AuthUpdateProfileRequested>(_onUpdateProfileRequested);
     on<AuthToggleDndRequested>(_onToggleDndRequested);
+    on<AuthAddCustomDurationRequested>(_onAddCustomDuration);
+    on<AuthRemoveCustomDurationRequested>(_onRemoveCustomDuration);
+    on<AuthAddContactRequested>(_onAddContact);
+    on<AuthDeleteContactRequested>(_onDeleteContact);
+    on<AuthAddCustomWhitelistRequested>(_onAddCustomWhitelist);
+    on<AuthRefreshUserRequested>(_onRefreshUser);
     on<AuthLogoutRequested>(_onLogoutRequested);
   }
 
@@ -167,8 +173,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
       final updated = await _api.updateProfile(
         name: event.name,
         email: event.email,
+        phone: event.phone,
         avatar: event.avatar,
         bio: event.bio,
+        notificationPreferences: event.notificationPreferences,
       );
       emit(AuthenticatedState(user: updated));
     } catch (e) {
@@ -187,19 +195,118 @@ class AuthBloc extends Bloc<AuthEvent, AuthBlocState> {
     if (user == null) return;
 
     final target = event.enabled ?? !user.dndEnabled;
-    // Optimistic update
-    final optimisticUser = user.copyWith(dndEnabled: target);
+    final optimisticUser = user.copyWith(
+      dndEnabled: target,
+      activeSessionStart: target ? DateTime.now() : null,
+      clearActiveSessionStart: !target,
+      activeSessionPlannedMinutes: event.durationMinutes ?? user.activeSessionPlannedMinutes,
+      activeSessionEndTime: target ? event.endTime : null,
+      clearActiveSessionEndTime: !target,
+      activeProfileName: event.profileName ?? user.activeProfileName,
+    );
     emit(AuthenticatedState(user: optimisticUser));
 
     try {
-      final actualState = await _api.toggleMasterDnd(enabled: target);
-      if (actualState != target) {
-        emit(AuthenticatedState(user: user.copyWith(dndEnabled: actualState)));
+      final res = await _api.toggleMasterDnd(
+        enabled: target,
+        durationMinutes: event.durationMinutes,
+        endTime: event.endTime,
+        profileName: event.profileName,
+      );
+      if (res['user'] is Map<String, dynamic>) {
+        emit(AuthenticatedState(user: UserModel.fromJson(res['user'] as Map<String, dynamic>)));
+      } else if (res['dndEnabled'] != target) {
+        emit(AuthenticatedState(user: user.copyWith(dndEnabled: res['dndEnabled'] == true)));
       }
     } catch (_) {
-      // Revert if API fails
       emit(AuthenticatedState(user: user));
     }
+  }
+
+  Future<void> _onAddCustomDuration(
+    AuthAddCustomDurationRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final updated = await _api.updatePreferences(addDurationMinutes: event.minutes);
+      emit(AuthenticatedState(user: updated));
+    } catch (_) {}
+  }
+
+  Future<void> _onRemoveCustomDuration(
+    AuthRemoveCustomDurationRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final updated = await _api.updatePreferences(removeDurationMinutes: event.minutes);
+      emit(AuthenticatedState(user: updated));
+    } catch (_) {}
+  }
+
+  Future<void> _onAddContact(
+    AuthAddContactRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final contacts = await _api.addContact(
+        name: event.name,
+        phone: event.phone,
+        relationship: event.relationship,
+      );
+      final updatedCats = user.customContactCategories.contains(event.relationship)
+          ? user.customContactCategories
+          : [...user.customContactCategories, event.relationship];
+      emit(AuthenticatedState(
+        user: user.copyWith(
+          emergencyContacts: contacts,
+          customContactCategories: updatedCats,
+        ),
+      ));
+    } catch (e) {
+      debugPrint('[AuthBloc._onAddContact] Error: $e');
+    }
+  }
+
+  Future<void> _onDeleteContact(
+    AuthDeleteContactRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final contacts = await _api.deleteContact(event.contactId);
+      emit(AuthenticatedState(user: user.copyWith(emergencyContacts: contacts)));
+    } catch (e) {
+      debugPrint('[AuthBloc._onDeleteContact] Error: $e');
+    }
+  }
+
+  Future<void> _onAddCustomWhitelist(
+    AuthAddCustomWhitelistRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    final user = currentUser;
+    if (user == null) return;
+    try {
+      final updated = await _api.updatePreferences(addWhitelistOption: event.option);
+      emit(AuthenticatedState(user: updated));
+    } catch (_) {}
+  }
+
+  Future<void> _onRefreshUser(
+    AuthRefreshUserRequested event,
+    Emitter<AuthBlocState> emit,
+  ) async {
+    try {
+      final profile = await _api.getProfile();
+      emit(AuthenticatedState(user: profile));
+    } catch (_) {}
   }
 
   Future<void> _onLogoutRequested(

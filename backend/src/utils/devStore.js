@@ -8,6 +8,7 @@ const users = new Map();
 const otps = new Map();
 const profiles = new Map();
 const rules = new Map();
+const activityLogs = new Map();
 
 // Helper to generate simulated ObjectIDs
 const genId = () => Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
@@ -27,6 +28,8 @@ const getDefaultProfiles = (userId) => [
     callWhitelist: 'Starred',
     messageWhitelist: 'VIP only',
     repeatCallersWindowMin: 15,
+    autoReplyMessage: 'I am sleeping and will reply in the morning.',
+    customTag: '',
   },
   {
     _id: genId(),
@@ -41,6 +44,8 @@ const getDefaultProfiles = (userId) => [
     callWhitelist: 'Starred',
     messageWhitelist: 'Work Team',
     repeatCallersWindowMin: 15,
+    autoReplyMessage: 'In a focus block. Will follow up soon.',
+    customTag: '',
   },
   {
     _id: genId(),
@@ -55,6 +60,8 @@ const getDefaultProfiles = (userId) => [
     callWhitelist: 'None',
     messageWhitelist: 'None',
     repeatCallersWindowMin: 0,
+    autoReplyMessage: 'Currently in a meeting. Will reach back once free.',
+    customTag: '',
   },
   {
     _id: genId(),
@@ -69,6 +76,8 @@ const getDefaultProfiles = (userId) => [
     callWhitelist: 'Starred',
     messageWhitelist: 'None',
     repeatCallersWindowMin: 15,
+    autoReplyMessage: 'Driving right now. Will reply when parked safely.',
+    customTag: '',
   },
   {
     _id: genId(),
@@ -83,6 +92,8 @@ const getDefaultProfiles = (userId) => [
     callWhitelist: 'None',
     messageWhitelist: 'None',
     repeatCallersWindowMin: 0,
+    autoReplyMessage: 'In a study session. Will respond after.',
+    customTag: '',
   },
 ];
 
@@ -93,6 +104,9 @@ const getDefaultRules = (userId) => [
     title: 'Sleep schedule',
     subtitle: 'Starts 10:00 PM, every night',
     triggerType: 'schedule',
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    targetProfileName: 'Sleep',
+    customCondition: '',
     active: true,
   },
   {
@@ -101,6 +115,9 @@ const getDefaultRules = (userId) => [
     title: 'Work hours',
     subtitle: 'Mon to Fri, 9:00 AM to 6:00 PM',
     triggerType: 'schedule',
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    targetProfileName: 'Work',
+    customCondition: '',
     active: true,
   },
   {
@@ -109,6 +126,9 @@ const getDefaultRules = (userId) => [
     title: 'Calendar meetings',
     subtitle: 'When marked "Busy" on Work Calendar',
     triggerType: 'calendar',
+    days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+    targetProfileName: 'Meeting',
+    customCondition: '',
     active: true,
   },
 ];
@@ -118,6 +138,7 @@ module.exports = {
   otps,
   profiles,
   rules,
+  activityLogs,
   genId,
   getDefaultProfiles,
   getDefaultRules,

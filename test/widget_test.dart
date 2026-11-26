@@ -11,6 +11,7 @@ import 'package:master_dnd/core/theme.dart';
 import 'package:master_dnd/main.dart';
 import 'package:master_dnd/screens/home_screen.dart';
 import 'package:master_dnd/screens/insights_screen.dart';
+import 'package:master_dnd/screens/stability_report_screen.dart';
 
 void main() {
   group('Master DND Widget & App Smoke Tests', () {
@@ -124,6 +125,93 @@ void main() {
       expect(defaults.stats.blockedTotal, 84);
       expect(defaults.breakdown.length, 7);
       expect(defaults.profiles.length, 4);
+    });
+
+    test('UserModel preserves custom choices and emergency contacts', () {
+      final json = {
+        'id': 'u1',
+        'phone': '+919999999999',
+        'name': 'Atulya',
+        'email': 'atulya@example.com',
+        'customDurations': [15, 30, 60, 90],
+        'customContactCategories': ['VIP Contact', 'Mentor'],
+        'customWhitelistOptions': ['Starred', 'Close Team'],
+        'totalAppUsageMinutes': 42,
+        'emergencyContacts': [
+          {'id': 'c1', 'name': 'Mom', 'phone': '123', 'relationship': 'Family', 'isVip': true},
+        ],
+      };
+
+      final user = UserModel.fromJson(json);
+      expect(user.customDurations, [15, 30, 60, 90]);
+      expect(user.customContactCategories, contains('Mentor'));
+      expect(user.customWhitelistOptions, contains('Close Team'));
+      expect(user.totalAppUsageMinutes, 42);
+      expect(user.emergencyContacts.length, 1);
+      expect(user.emergencyContacts.first.name, 'Mom');
+    });
+
+    test('StabilityReportData parses json accurately', () {
+      final report = StabilityReportData.fromJson({
+        'range': '7d',
+        'hasData': true,
+        'overallStabilityScore': 88,
+        'stabilityGrade': 'Optimal',
+        'stabilityDelta': 6,
+        'pillars': {
+          'adherenceScore': 92,
+          'consistencyScore': 85,
+          'shieldScore': 90,
+          'focusRatingScore': 84,
+        },
+        'summary': {
+          'totalSessions': 5,
+          'completedSessions': 5,
+          'earlyExitSessions': 0,
+          'totalQuietMinutes': 240,
+          'totalAppUsageMinutes': 45,
+          'avgSessionMinutes': 48,
+          'currentStreakDays': 4,
+          'longestStreakDays': 4,
+          'activeDaysCount': 4,
+          'periodDays': 7,
+          'totalSilenced': 18,
+          'totalLetThrough': 2,
+        },
+        'trend': [
+          {
+            'label': 'Mon',
+            'stabilityScore': 88,
+            'quietHours': 2.0,
+            'appUsageMinutes': 15,
+            'silenced': 6,
+            'allowed': 1,
+            'adherenceRate': 100,
+            'sessions': 2,
+          },
+        ],
+        'profileStability': [
+          {
+            'name': 'Work',
+            'sessions': 3,
+            'totalHours': 3.0,
+            'avgStabilityScore': 90,
+            'adherenceRate': 95,
+          },
+        ],
+        'recommendations': [
+          {'title': 'High session adherence', 'detail': 'Great job!', 'tone': 'positive'},
+        ],
+      });
+
+      expect(report.hasData, isTrue);
+      expect(report.overallStabilityScore, 88);
+      expect(report.stabilityGrade, 'Optimal');
+      expect(report.pillars.adherenceScore, 92);
+      expect(report.summary.totalAppUsageMinutes, 45);
+      expect(report.trend.length, 1);
+      expect(report.profileStability.first.name, 'Work');
+      expect(report.recommendations.first.tone, 'positive');
     });
   });
 
@@ -243,6 +331,32 @@ void main() {
       expect(find.text('This week'), findsOneWidget);
       expect(find.text('Last week'), findsOneWidget);
       expect(find.text('Month'), findsOneWidget);
+    });
+
+    testWidgets('StabilityReportScreen renders headers, score gauge, and range chips', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MultiBlocProvider(
+          providers: [
+            BlocProvider<AuthBloc>(create: (_) => AuthBloc()),
+            BlocProvider<DndBloc>(create: (_) => DndBloc()),
+          ],
+          child: MaterialApp(
+            theme: dayTheme,
+            home: const Scaffold(
+              body: StabilityReportScreen(),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Stability Report'), findsOneWidget);
+      expect(find.text('7 Days'), findsAtLeastNWidgets(1));
+      expect(find.text('30 Days'), findsOneWidget);
+      expect(find.text('90 Days'), findsOneWidget);
+      expect(find.text('All Time'), findsOneWidget);
+      expect(find.text('STABILITY'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('STABILITY PILLARS'), 200);
+      expect(find.text('STABILITY PILLARS'), findsOneWidget);
     });
   });
 

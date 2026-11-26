@@ -63,26 +63,89 @@ class AuthUpdateProfileRequested extends AuthEvent {
   const AuthUpdateProfileRequested({
     this.name,
     this.email,
+    this.phone,
     this.avatar,
     this.bio,
+    this.notificationPreferences,
   });
 
   final String? name;
   final String? email;
+  final String? phone;
   final String? avatar;
   final String? bio;
+  final Map<String, bool>? notificationPreferences;
 
   @override
-  List<Object?> get props => [name, email, avatar, bio];
+  List<Object?> get props => [name, email, phone, avatar, bio, notificationPreferences];
 }
 
-/// Dispatched to toggle master DND power switch
+/// Dispatched to toggle master DND power switch and log session timing
 class AuthToggleDndRequested extends AuthEvent {
-  const AuthToggleDndRequested({this.enabled});
+  const AuthToggleDndRequested({
+    this.enabled,
+    this.durationMinutes,
+    this.endTime,
+    this.profileName,
+  });
   final bool? enabled;
+  final int? durationMinutes;
+  final DateTime? endTime;
+  final String? profileName;
 
   @override
-  List<Object?> get props => [enabled];
+  List<Object?> get props => [enabled, durationMinutes, endTime, profileName];
+}
+
+/// Dispatched to add/remove custom user choices & VIP contacts saved to MongoDB
+class AuthAddCustomDurationRequested extends AuthEvent {
+  const AuthAddCustomDurationRequested(this.minutes);
+  final int minutes;
+
+  @override
+  List<Object?> get props => [minutes];
+}
+
+class AuthRemoveCustomDurationRequested extends AuthEvent {
+  const AuthRemoveCustomDurationRequested(this.minutes);
+  final int minutes;
+
+  @override
+  List<Object?> get props => [minutes];
+}
+
+class AuthAddContactRequested extends AuthEvent {
+  const AuthAddContactRequested({
+    required this.name,
+    this.phone = '',
+    this.relationship = 'VIP Contact',
+  });
+  final String name;
+  final String phone;
+  final String relationship;
+
+  @override
+  List<Object?> get props => [name, phone, relationship];
+}
+
+class AuthDeleteContactRequested extends AuthEvent {
+  const AuthDeleteContactRequested(this.contactId);
+  final String contactId;
+
+  @override
+  List<Object?> get props => [contactId];
+}
+
+class AuthAddCustomWhitelistRequested extends AuthEvent {
+  const AuthAddCustomWhitelistRequested(this.option);
+  final String option;
+
+  @override
+  List<Object?> get props => [option];
+}
+
+class AuthRefreshUserRequested extends AuthEvent {
+  const AuthRefreshUserRequested();
 }
 
 /// Dispatched on user logout

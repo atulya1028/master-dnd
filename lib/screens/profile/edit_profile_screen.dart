@@ -17,10 +17,13 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _bioController = TextEditingController();
 
   late String _selectedAvatar;
+  late bool _allowDndAccess;
+  late bool _allowContacts;
+  late bool _allowNotifications;
   String? _localError;
 
   final List<String> _avatarChoices = const ['A', 'D', 'M', 'R', 'S', '🌙', '⚡', '🛡️'];
@@ -30,15 +33,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     final user = context.read<AuthBloc>().currentUser;
     _nameController.text = user?.name ?? '';
-    _emailController.text = user?.email ?? '';
+    _phoneController.text = user?.phone ?? '';
     _bioController.text = user?.bio ?? '';
     _selectedAvatar = user?.avatar.isNotEmpty == true ? user!.avatar : 'A';
+    _allowDndAccess = user?.notificationPreferences['allowDndAccess'] ?? true;
+    _allowContacts = user?.notificationPreferences['allowContacts'] ?? true;
+    _allowNotifications = user?.notificationPreferences['allowNotifications'] ?? true;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
+    _phoneController.dispose();
     _bioController.dispose();
     super.dispose();
   }
@@ -53,9 +59,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _localError = null);
     context.read<AuthBloc>().add(AuthUpdateProfileRequested(
           name: name,
-          email: _emailController.text.trim(),
+          phone: _phoneController.text.trim(),
           avatar: _selectedAvatar,
           bio: _bioController.text.trim(),
+          notificationPreferences: {
+            'allowDndAccess': _allowDndAccess,
+            'allowContacts': _allowContacts,
+            'allowNotifications': _allowNotifications,
+          },
         ));
   }
 
@@ -96,7 +107,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       listener: (context, state) {
         if (state is AuthenticatedState) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Profile updated successfully!')),
+            const SnackBar(content: Text('Profile updated in database!')),
           );
           Navigator.of(context).pop();
         } else if (state is AuthFailureState) {
@@ -145,7 +156,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             child: ListView(
               padding: const EdgeInsets.all(Space.s24),
               children: [
-                // Avatar section
                 Center(
                   child: Stack(
                     alignment: Alignment.bottomRight,
@@ -205,7 +215,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: Space.s24),
 
-                // Registered Email (Read-Only)
                 const OverlineText('Registered Email Address'),
                 const SizedBox(height: Space.s8),
                 DndCard(
@@ -237,7 +246,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 style: context.text.bodySmall!.copyWith(
                                   color: c.armed,
                                   fontWeight: FontWeight.bold,
-                                  ),
+                                ),
                               ),
                             ],
                           ),
@@ -248,7 +257,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: Space.s16),
 
-                // Full Name
                 const OverlineText('Full Name'),
                 const SizedBox(height: Space.s8),
                 DndCard(
@@ -267,18 +275,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: Space.s16),
 
-                // Email Address
-                const OverlineText('Email Address'),
+                const OverlineText('Phone Number (Optional)'),
                 const SizedBox(height: Space.s8),
                 DndCard(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
                     child: TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
                       style: context.text.titleMedium,
                       decoration: const InputDecoration(
-                        hintText: 'Enter email address',
+                        hintText: 'e.g. +91 98765 43210',
                         border: InputBorder.none,
                       ),
                     ),
@@ -286,7 +293,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: Space.s16),
 
-                // Bio
                 const OverlineText('Role / Status Note'),
                 const SizedBox(height: Space.s8),
                 DndCard(
@@ -302,6 +308,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: Space.s16),
+
+                const OverlineText('DND Preferences'),
+                const SizedBox(height: Space.s8),
+                DndGroup(children: [
+                  SwitchListTile(
+                    title: Text('Do Not Disturb access', style: context.text.labelLarge),
+                    subtitle: Text('Allow switching silent modes', style: context.text.bodySmall),
+                    value: _allowDndAccess,
+                    onChanged: (v) => setState(() => _allowDndAccess = v),
+                  ),
+                  SwitchListTile(
+                    title: Text('Contacts matching', style: context.text.labelLarge),
+                    subtitle: Text('Allow VIP contact ring-through', style: context.text.bodySmall),
+                    value: _allowContacts,
+                    onChanged: (v) => setState(() => _allowContacts = v),
+                  ),
+                  SwitchListTile(
+                    title: Text('Reminders & alerts', style: context.text.labelLarge),
+                    subtitle: Text('Notify before scheduled rules start', style: context.text.bodySmall),
+                    value: _allowNotifications,
+                    onChanged: (v) => setState(() => _allowNotifications = v),
+                  ),
+                ]),
 
                 if (_localError != null) ...[
                   const SizedBox(height: Space.s16),

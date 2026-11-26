@@ -11,7 +11,12 @@ const {
   createRuleHandler,
   updateRuleHandler,
   deleteRuleHandler,
+  getLogsHandler,
+  createLogHandler,
+  deleteLogHandler,
+  usagePingHandler,
   getInsightsHandler,
+  getStabilityReportHandler,
 } = require('../controllers/dndController');
 
 router.use(requireAuth);
@@ -26,6 +31,13 @@ router.get('/rules', getRulesHandler);
 router.post('/rules', createRuleHandler);
 router.put('/rules/:id', updateRuleHandler);
 router.delete('/rules/:id', deleteRuleHandler);
+
+router.get('/logs', getLogsHandler);
+router.post('/logs', createLogHandler);
+router.delete('/logs/:id', deleteLogHandler);
+router.post('/usage-ping', usagePingHandler);
+
 router.get('/insights', getInsightsHandler);
+router.get('/stability-report', getStabilityReportHandler);
 
 module.exports = router;

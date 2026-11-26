@@ -4,45 +4,72 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_event.dart';
 import '../bloc/dnd/dnd_bloc.dart';
 import '../bloc/dnd/dnd_state.dart';
 import '../core/api_service.dart';
 import '../core/models.dart';
 import '../core/tokens.dart';
+import '../widgets/log_session_sheet.dart';
 import '../widgets/widgets.dart';
 import 'profile/edit_profile_screen.dart';
 import 'profile_editor_screen.dart';
+import 'stability_report_screen.dart';
 
 /// Home tab: Day look when DND is off, Night look when DND is armed.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.dndOn, required this.onToggle});
+  const HomeScreen({
+    super.key,
+    required this.dndOn,
+    required this.onToggle,
+    this.onToggleWithSession,
+    this.onOpenStabilityReport,
+  });
 
   final bool dndOn;
   final ValueChanged<bool> onToggle;
+  final void Function(bool enabled, int durationMinutes, DateTime? endTime)? onToggleWithSession;
+  final VoidCallback? onOpenStabilityReport;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _durationIndex = 1;
+  int _selectedChipIndex = 1; // index inside [durations..., customTimeChip]
+  bool _useCustomEndTime = false;
   TimeOfDay _customEndTime = const TimeOfDay(hour: 6, minute: 30);
   static const _allowedContactsKey = 'master_dnd_allowed_contacts';
-  List<LetThroughContact> _allowedContacts = [];
+  List<LetThroughContact> _localFallbackContacts = [];
+  int _silencedTonight = 0;
 
   @override
   void initState() {
     super.initState();
-    _loadAllowedContacts();
+    _loadFallbackContacts();
+    _refreshTonightStats();
   }
 
-  Future<void> _loadAllowedContacts() async {
+  Future<void> _refreshTonightStats() async {
+    try {
+      final user = context.read<AuthBloc>().currentUser;
+      if (user == null) return;
+      final insights = await ApiService.instance.getInsights(range: 0);
+      if (mounted) {
+        setState(() {
+          _silencedTonight = insights.stats.silencedTonight;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadFallbackContacts() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getStringList(_allowedContactsKey);
-      if (raw != null) {
+      if (raw != null && mounted) {
         setState(() {
-          _allowedContacts = raw
+          _localFallbackContacts = raw
               .map((item) => LetThroughContact.fromJson(jsonDecode(item) as Map<String, dynamic>))
               .toList();
         });
@@ -50,19 +77,118 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
-  Future<void> _saveAllowedContacts() async {
+  Future<void> _saveFallbackContacts() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final list = _allowedContacts.map((c) => jsonEncode(c.toJson())).toList();
+      final list = _localFallbackContacts.map((c) => jsonEncode(c.toJson())).toList();
       await prefs.setStringList(_allowedContactsKey, list);
     } catch (_) {}
   }
 
+  String _formatDurationLabel(int minutes, {bool verbose = false}) {
+    if (minutes % 60 == 0) {
+      final hrs = minutes ~/ 60;
+      return hrs == 1 ? '1 hour' : '$hrs hours';
+    }
+    return verbose ? '$minutes minutes' : '$minutes min';
+  }
+
+  int _currentPlannedMinutes(List<int> durations) {
+    if (_useCustomEndTime) {
+      final now = DateTime.now();
+      var targetDt = DateTime(now.year, now.month, now.day, _customEndTime.hour, _customEndTime.minute);
+      if (targetDt.isBefore(now)) {
+        targetDt = targetDt.add(const Duration(days: 1));
+      }
+      return targetDt.difference(now).inMinutes.clamp(1, 1440);
+    }
+    if (_selectedChipIndex >= 0 && _selectedChipIndex < durations.length) {
+      return durations[_selectedChipIndex];
+    }
+    return durations.isNotEmpty ? durations.first : 60;
+  }
+
+  DateTime? _currentEndDateTime(List<int> durations) {
+    if (_useCustomEndTime) {
+      final now = DateTime.now();
+      var targetDt = DateTime(now.year, now.month, now.day, _customEndTime.hour, _customEndTime.minute);
+      if (targetDt.isBefore(now)) {
+        targetDt = targetDt.add(const Duration(days: 1));
+      }
+      return targetDt;
+    }
+    return DateTime.now().add(Duration(minutes: _currentPlannedMinutes(durations)));
+  }
+
+  void _triggerToggle(bool targetOn, List<int> durations) {
+    if (widget.onToggleWithSession != null) {
+      widget.onToggleWithSession!(
+        targetOn,
+        _currentPlannedMinutes(durations),
+        targetOn ? _currentEndDateTime(durations) : null,
+      );
+    } else {
+      widget.onToggle(targetOn);
+    }
+    if (!targetOn) {
+      Future.delayed(const Duration(milliseconds: 500), _refreshTonightStats);
+    }
+  }
+
+  Future<void> _showAddCustomDurationDialog(BuildContext context) async {
+    final minsCtrl = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Custom Duration'),
+        content: TextField(
+          controller: minsCtrl,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Duration in minutes',
+            hintText: 'e.g. 15, 45, 90',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final mins = int.tryParse(minsCtrl.text.trim());
+              if (mins == null || mins < 1 || mins > 1440) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Enter minutes between 1 and 1440')),
+                );
+                return;
+              }
+              context.read<AuthBloc>().add(AuthAddCustomDurationRequested(mins));
+              Navigator.of(ctx).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Saved ${_formatDurationLabel(mins)} preset to database')),
+              );
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    minsCtrl.dispose();
+  }
+
   Future<void> _showAddContactDialog(BuildContext context) async {
+    final user = context.read<AuthBloc>().currentUser;
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
+    final customCatCtrl = TextEditingController();
     int selectedTagIndex = 0;
-    final tags = const ['VIP Contact', 'Family', 'Doctor / Emergency', 'Repeat Caller', 'Work Priority'];
+    bool useCustomCat = false;
+    final tags = List<String>.from(
+      user?.customContactCategories ??
+          const ['VIP Contact', 'Family', 'Doctor / Emergency', 'Repeat Caller', 'Work Priority'],
+    );
 
     await showModalBottomSheet<void>(
       context: context,
@@ -141,13 +267,38 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (i > 0) const SizedBox(width: Space.s8),
                             ChoiceChip(
                               label: Text(tags[i]),
-                              selected: selectedTagIndex == i,
-                              onSelected: (_) => setModalState(() => selectedTagIndex = i),
+                              selected: !useCustomCat && selectedTagIndex == i,
+                              onSelected: (_) => setModalState(() {
+                                useCustomCat = false;
+                                selectedTagIndex = i;
+                              }),
                             ),
                           ],
+                          const SizedBox(width: Space.s8),
+                          ChoiceChip(
+                            label: const Text('+ Custom'),
+                            selected: useCustomCat,
+                            onSelected: (_) => setModalState(() => useCustomCat = true),
+                          ),
                         ],
                       ),
                     ),
+                    if (useCustomCat) ...[
+                      const SizedBox(height: Space.s12),
+                      DndCard(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                          child: TextField(
+                            controller: customCatCtrl,
+                            style: ctx.text.titleMedium,
+                            decoration: const InputDecoration(
+                              hintText: 'Type custom category (saved to database)',
+                              border: InputBorder.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: Space.s24),
                     AppButton('Save Allowed Contact', onPressed: () async {
                       final name = nameCtrl.text.trim();
@@ -159,26 +310,40 @@ class _HomeScreenState extends State<HomeScreen> {
                       }
 
                       final phone = phoneCtrl.text.trim();
-                      final tag = tags[selectedTagIndex];
-                      final detail = phone.isNotEmpty ? '$tag • $phone' : tag;
-                      final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+                      final customTag = customCatCtrl.text.trim();
+                      final tag = (useCustomCat && customTag.isNotEmpty)
+                          ? customTag
+                          : tags[selectedTagIndex];
 
-                      final newContact = LetThroughContact(
-                        initial: initial,
-                        name: name,
-                        detail: detail,
-                        phone: phone,
-                      );
-
-                      setState(() {
-                        _allowedContacts.add(newContact);
-                      });
-                      await _saveAllowedContacts();
+                      if (user != null) {
+                        context.read<AuthBloc>().add(
+                              AuthAddContactRequested(
+                                name: name,
+                                phone: phone,
+                                relationship: tag,
+                              ),
+                            );
+                      } else {
+                        final detail = phone.isNotEmpty ? '$tag • $phone' : tag;
+                        final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+                        setState(() {
+                          _localFallbackContacts.add(
+                            LetThroughContact(
+                              initial: initial,
+                              name: name,
+                              detail: detail,
+                              phone: phone,
+                              relationship: tag,
+                            ),
+                          );
+                        });
+                        await _saveFallbackContacts();
+                      }
 
                       if (modalCtx.mounted) Navigator.of(modalCtx).pop();
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('$name added to allowed contacts')),
+                          SnackBar(content: Text('$name saved to allowed contacts')),
                         );
                       }
                     }),
@@ -192,12 +357,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _removeContact(int index) async {
-    final contact = _allowedContacts[index];
-    setState(() {
-      _allowedContacts.removeAt(index);
-    });
-    await _saveAllowedContacts();
+  Future<void> _removeContact(int index, List<LetThroughContact> contacts, bool isAuthenticated) async {
+    final contact = contacts[index];
+    if (isAuthenticated && contact.id.isNotEmpty) {
+      context.read<AuthBloc>().add(AuthDeleteContactRequested(contact.id));
+    } else {
+      setState(() {
+        _localFallbackContacts.removeAt(index);
+      });
+      await _saveFallbackContacts();
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${contact.name} removed from allowed contacts')),
@@ -242,8 +411,15 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _customEndTime = picked;
-        _durationIndex = 2;
+        _useCustomEndTime = true;
       });
+      final user = context.read<AuthBloc>().currentUser;
+      if (user != null) {
+        final now = DateTime.now();
+        var targetDt = DateTime(now.year, now.month, now.day, picked.hour, picked.minute);
+        if (targetDt.isBefore(now)) targetDt = targetDt.add(const Duration(days: 1));
+        ApiService.instance.updatePreferences(activeSessionEndTime: targetDt);
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -335,39 +511,51 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final c = context.dnd;
     final dndOn = widget.dndOn;
+    final user = context.watch<AuthBloc>().currentUser;
+    final dndState = context.watch<DndBloc>().state;
+    final profiles = switch (dndState) {
+      DndLoaded(:final profiles) => profiles,
+      _ => sampleProfiles,
+    };
+    final activeProfile = profiles.where((p) => p.active).firstOrNull ??
+        (profiles.isNotEmpty ? profiles.first : sampleProfiles.first);
+    final activeProfileName = user?.activeProfileName.isNotEmpty == true
+        ? user!.activeProfileName
+        : activeProfile.name;
+
+    final durations = user?.customDurations ?? const [30, 60];
+    final safeIndex = _selectedChipIndex.clamp(0, durations.length - 1);
+    final allowedContacts = user != null ? user.emergencyContacts : _localFallbackContacts;
 
     final customTimeLabel = 'Until ${_formatTimeOfDay(_customEndTime)}';
     final customRemaining = _calculateRemainingTime(_customEndTime);
 
-    final durationSubtitle = switch (_durationIndex) {
-      0 => 'Quiet for 30 minutes once started',
-      1 => 'Quiet for 1 hour once started',
-      _ => 'Quiet until ${_formatTimeOfDay(_customEndTime)} ($customRemaining)',
-    };
+    final durationSubtitle = _useCustomEndTime
+        ? 'Quiet until ${_formatTimeOfDay(_customEndTime)} ($customRemaining)'
+        : 'Quiet for ${_formatDurationLabel(durations[safeIndex], verbose: true)} once started';
 
-    final activeSubtitle = switch (_durationIndex) {
-      0 => 'Quiet for 30 minutes (active)',
-      1 => 'Quiet for 1 hour (active)',
-      _ => 'Quiet until ${_formatTimeOfDay(_customEndTime)}, $customRemaining',
-    };
+    final activeSubtitle = _useCustomEndTime
+        ? 'Quiet until ${_formatTimeOfDay(_customEndTime)}, $customRemaining'
+        : 'Quiet for ${_formatDurationLabel(durations[safeIndex], verbose: true)} (active)';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(Space.s24, Space.s16, Space.s24, Space.s24),
       children: [
         _Header(
           dndOn: dndOn,
+          activeProfileName: activeProfileName,
           onDiagnosticsTap: () => _showSystemDiagnostics(context),
         ),
         const SizedBox(height: Space.s24),
         Center(
           child: _PowerButton(
             on: dndOn,
-            onTap: () => widget.onToggle(!dndOn),
+            onTap: () => _triggerToggle(!dndOn, durations),
           ),
         ),
         const SizedBox(height: Space.s24),
         Text(
-          dndOn ? 'Sleep is on' : 'Do Not Disturb is off',
+          dndOn ? '$activeProfileName is on' : 'Do Not Disturb is off',
           textAlign: TextAlign.center,
           style: context.text.titleLarge,
         ),
@@ -378,19 +566,29 @@ class _HomeScreenState extends State<HomeScreen> {
           style: context.text.bodyMedium!.copyWith(color: c.textSecondary),
         ),
         const SizedBox(height: Space.s24),
-        if (dndOn) ..._onContent(context) else ..._offContent(context, customTimeLabel),
+        if (dndOn)
+          ..._onContent(context, activeProfileName, durations, allowedContacts, user != null)
+        else
+          ..._offContent(context, customTimeLabel, durations, safeIndex, activeProfile, allowedContacts),
       ],
     );
   }
 
-  List<Widget> _offContent(BuildContext context, String customTimeLabel) {
+  List<Widget> _offContent(
+    BuildContext context,
+    String customTimeLabel,
+    List<int> durations,
+    int safeIndex,
+    DndProfile nextProfile,
+    List<LetThroughContact> allowedContacts,
+  ) {
     final c = context.dnd;
-    final dndState = context.watch<DndBloc>().state;
-    final profiles = switch (dndState) {
-      DndLoaded(:final profiles) => profiles,
-      _ => sampleProfiles,
-    };
-    final nextProfile = profiles.isNotEmpty ? profiles.first : sampleProfiles.first;
+    final user = context.read<AuthBloc>().currentUser;
+    final labels = [
+      for (final d in durations) _formatDurationLabel(d),
+      customTimeLabel,
+    ];
+    final selectedChip = _useCustomEndTime ? durations.length : safeIndex;
 
     return [
       Center(
@@ -400,13 +598,16 @@ class _HomeScreenState extends State<HomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ChipRow(
-                labels: ['30 min', '1 hour', customTimeLabel],
-                selected: _durationIndex,
+                labels: labels,
+                selected: selectedChip,
                 onSelected: (i) async {
-                  if (i == 2) {
+                  if (i == durations.length) {
                     await _pickCustomEndTime();
                   } else {
-                    setState(() => _durationIndex = i);
+                    setState(() {
+                      _useCustomEndTime = false;
+                      _selectedChipIndex = i;
+                    });
                   }
                 },
               ),
@@ -424,6 +625,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 side: BorderSide(color: c.accent.withValues(alpha: 0.3)),
                 onPressed: _pickCustomEndTime,
               ),
+              if (user != null) ...[
+                const SizedBox(width: Space.s8),
+                ActionChip(
+                  avatar: Icon(Icons.add, size: 16, color: c.accent),
+                  label: Text(
+                    'Add duration',
+                    style: context.text.bodySmall!.copyWith(
+                      color: c.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  backgroundColor: c.surface,
+                  side: BorderSide(color: c.border),
+                  onPressed: () => _showAddCustomDurationDialog(context),
+                ),
+              ],
             ],
           ),
         ),
@@ -436,7 +653,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onAction: () => _showBatteryGuide(context),
       ),
       const SizedBox(height: Space.s24),
-      const OverlineText('Next up'),
+      const OverlineText('Active / Next Profile'),
       const SizedBox(height: Space.s8),
       GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -452,7 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: nextProfile.icon,
             title: nextProfile.name,
             subtitle: nextProfile.meta.isNotEmpty ? nextProfile.meta : 'Configured profile',
-            value: 'in 2 h 19 m',
+            value: nextProfile.active ? 'Armed' : 'Ready',
           ),
         ),
       ),
@@ -460,7 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const OverlineText('Allowed VIP Contacts'),
+          const Expanded(child: OverlineText('Allowed VIP Contacts')),
           TextButton.icon(
             icon: Icon(Icons.add, size: 16, color: c.accent),
             label: Text('Add', style: context.text.labelLarge?.copyWith(color: c.accent)),
@@ -473,10 +690,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: SettingRow(
           icon: DndIcons.users,
           title: 'VIP & Allowed Contacts',
-          subtitle: _allowedContacts.isEmpty
+          subtitle: allowedContacts.isEmpty
               ? 'No contacts added yet • Tap to add VIP contacts'
-              : '${_allowedContacts.length} contact${_allowedContacts.length > 1 ? 's' : ''} allowed to ring through',
-          value: _allowedContacts.isEmpty ? 'Add' : '${_allowedContacts.length}',
+              : '${allowedContacts.length} contact${allowedContacts.length > 1 ? 's' : ''} allowed to ring through',
+          value: allowedContacts.isEmpty ? 'Add' : '${allowedContacts.length}',
           onTap: () => _showAddContactDialog(context),
         ),
       ),
@@ -516,31 +733,61 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  List<Widget> _onContent(BuildContext context) {
+  List<Widget> _onContent(
+    BuildContext context,
+    String activeProfileName,
+    List<int> durations,
+    List<LetThroughContact> allowedContacts,
+    bool isAuthenticated,
+  ) {
     final c = context.dnd;
-    Widget tile(String value, String label) => Expanded(
-          child: DndCard(
-            child: Padding(
-              padding: const EdgeInsets.all(Space.s16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(value, style: context.text.titleLarge),
-                Text(label, style: context.text.bodySmall),
-              ]),
+    Widget tile(String value, String label, {VoidCallback? onTap}) => Expanded(
+          child: GestureDetector(
+            onTap: onTap,
+            child: DndCard(
+              child: Padding(
+                padding: const EdgeInsets.all(Space.s16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(value, style: context.text.titleLarge),
+                  Text(label, style: context.text.bodySmall),
+                ]),
+              ),
             ),
           ),
         );
 
     return [
       Row(children: [
-        tile('12', 'Silenced tonight'),
+        tile(
+          '$_silencedTonight',
+          'Silenced today (tap to log)',
+          onTap: () async {
+            final saved = await showLogSessionSheet(context, initialProfileName: activeProfileName);
+            if (saved) _refreshTonightStats();
+          },
+        ),
         const SizedBox(width: Space.s12),
-        tile('${_allowedContacts.length}', 'Let through'),
+        tile(
+          '${allowedContacts.length}',
+          'Let through',
+          onTap: () {
+            if (widget.onOpenStabilityReport != null) {
+              widget.onOpenStabilityReport!();
+            } else {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const Scaffold(body: SafeArea(child: StabilityReportScreen())),
+                ),
+              );
+            }
+          },
+        ),
       ]),
       const SizedBox(height: Space.s24),
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const OverlineText('Let through by your rules'),
+          const Expanded(child: OverlineText('Let through by your rules')),
           TextButton.icon(
             icon: Icon(Icons.person_add_alt_1, size: 16, color: c.accent),
             label: Text('Add VIP', style: context.text.labelLarge?.copyWith(color: c.accent)),
@@ -549,7 +796,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       const SizedBox(height: Space.s8),
-      if (_allowedContacts.isEmpty)
+      if (allowedContacts.isEmpty)
         DndCard(
           child: Padding(
             padding: const EdgeInsets.all(Space.s24),
@@ -576,8 +823,12 @@ class _HomeScreenState extends State<HomeScreen> {
         )
       else
         DndGroup(children: [
-          for (var i = 0; i < _allowedContacts.length; i++)
-            _contactItem(context, _allowedContacts[i], () => _removeContact(i)),
+          for (var i = 0; i < allowedContacts.length; i++)
+            _contactItem(
+              context,
+              allowedContacts[i],
+              () => _removeContact(i, allowedContacts, isAuthenticated),
+            ),
         ]),
       const SizedBox(height: Space.s16),
       Row(children: [
@@ -589,7 +840,14 @@ class _HomeScreenState extends State<HomeScreen> {
               final newHour = (_customEndTime.hour + 1) % 24;
               setState(() {
                 _customEndTime = TimeOfDay(hour: newHour, minute: _customEndTime.minute);
+                _useCustomEndTime = true;
               });
+              final now = DateTime.now();
+              var targetDt = DateTime(now.year, now.month, now.day, newHour, _customEndTime.minute);
+              if (targetDt.isBefore(now)) targetDt = targetDt.add(const Duration(days: 1));
+              if (isAuthenticated) {
+                ApiService.instance.updatePreferences(activeSessionEndTime: targetDt);
+              }
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Quiet time extended by 1 hour (until ${_formatTimeOfDay(_customEndTime)})'),
@@ -610,7 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: AppButton(
             'End now',
-            onPressed: () => widget.onToggle(false),
+            onPressed: () => _triggerToggle(false, durations),
           ),
         ),
       ]),
@@ -619,9 +877,14 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.dndOn, required this.onDiagnosticsTap});
+  const _Header({
+    required this.dndOn,
+    required this.activeProfileName,
+    required this.onDiagnosticsTap,
+  });
 
   final bool dndOn;
+  final String activeProfileName;
   final VoidCallback onDiagnosticsTap;
 
   @override
@@ -640,7 +903,7 @@ class _Header extends StatelessWidget {
     return Row(children: [
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(dndOn ? 'Sleep profile' : '$timeGreeting, $name', style: context.text.bodySmall),
+          Text(dndOn ? '$activeProfileName profile' : '$timeGreeting, $name', style: context.text.bodySmall),
           Text('Master DND', style: context.text.titleLarge),
         ]),
       ),
@@ -727,7 +990,7 @@ class _PowerButton extends StatelessWidget {
   }
 }
 
-/// Interactive System Diagnostics sheet allowing users to verify that every component is working properly.
+/// Interactive System Diagnostics sheet reading live backend health & BLoC status.
 class _SystemDiagnosticsSheet extends StatefulWidget {
   const _SystemDiagnosticsSheet();
 
@@ -759,7 +1022,13 @@ class _SystemDiagnosticsSheetState extends State<_SystemDiagnosticsSheet> {
 
   Future<void> _sendTestOtp() async {
     final user = context.read<AuthBloc>().currentUser;
-    final email = user?.email ?? 'atulya1992@zohomail.in';
+    final email = user?.email ?? '';
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sign in first to test OTP delivery to your email.')),
+      );
+      return;
+    }
 
     setState(() => _isSendingTestOtp = true);
     try {
@@ -792,7 +1061,16 @@ class _SystemDiagnosticsSheetState extends State<_SystemDiagnosticsSheet> {
     final isOnline = _healthResult?['online'] == true;
     final latency = _healthResult?['latencyMs'] ?? 0;
     final service = _healthResult?['service'] ?? 'Master DND API';
+    final dbConnected = _healthResult?['dbConnected'] == true;
+    final storageMode = _healthResult?['storageMode']?.toString() ?? 'checking';
+    final smtpConfigured = _healthResult?['smtpConfigured'] == true;
+    final uptime = _healthResult?['uptimeSeconds'] ?? 0;
     final user = context.watch<AuthBloc>().currentUser;
+    final dndState = context.watch<DndBloc>().state;
+    final profileCount = switch (dndState) {
+      DndLoaded(:final profiles) => profiles.length,
+      _ => 0,
+    };
 
     return SafeArea(
       child: Padding(
@@ -804,7 +1082,7 @@ class _SystemDiagnosticsSheetState extends State<_SystemDiagnosticsSheet> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.verified, color: c.armed, size: 28),
+                  Icon(Icons.verified, color: isOnline ? c.armed : c.warning, size: 28),
                   const SizedBox(width: Space.s12),
                   Expanded(
                     child: Column(
@@ -834,8 +1112,8 @@ class _SystemDiagnosticsSheetState extends State<_SystemDiagnosticsSheet> {
                 context,
                 title: 'Microsoft Azure Cloud Backend',
                 subtitle: isOnline
-                    ? '$service • Healthy (${latency}ms) • Production'
-                    : 'Connecting to cloud endpoint...',
+                    ? '$service • Healthy (${latency}ms) • Uptime ${uptime}s'
+                    : (_isChecking ? 'Checking backend...' : 'Backend offline or unreachable'),
                 ok: isOnline,
                 icon: Icons.cloud_done_outlined,
               ),
@@ -843,33 +1121,31 @@ class _SystemDiagnosticsSheetState extends State<_SystemDiagnosticsSheet> {
               _item(
                 context,
                 title: 'MongoDB Database Cluster',
-                subtitle: 'Atlas Cloud Cluster active & resilient in-memory fallback',
-                ok: true,
+                subtitle: dbConnected
+                    ? 'MongoDB Atlas connected & persisting live data'
+                    : (isOnline ? 'Fallback mode ($storageMode)' : 'Awaiting API health check'),
+                ok: dbConnected || isOnline,
                 icon: Icons.storage_outlined,
               ),
               const SizedBox(height: Space.s8),
               _item(
                 context,
                 title: 'Zoho Mail SMTP OTP Engine',
-                subtitle: 'Configured for real 6-digit OTP delivery',
-                ok: true,
+                subtitle: smtpConfigured
+                    ? 'SMTP configured for real 6-digit OTP delivery'
+                    : 'Console / dev OTP mode (SMTP env not set)',
+                ok: smtpConfigured,
                 icon: Icons.mark_email_read_outlined,
               ),
               const SizedBox(height: Space.s8),
               _item(
                 context,
-                title: 'OTP Rate Limiter (Security)',
-                subtitle: '10 requests per 1 hour window with auto-reset',
-                ok: true,
-                icon: Icons.security_outlined,
-              ),
-              const SizedBox(height: Space.s8),
-              _item(
-                context,
-                title: 'Custom Time & Schedule Engine',
-                subtitle: 'Native TimePicker & automated rule triggers active',
-                ok: true,
-                icon: Icons.alarm_on_outlined,
+                title: 'Active User & Profiles Sync',
+                subtitle: user != null
+                    ? '$profileCount profiles • ${user.emergencyContacts.length} VIP contacts • ${user.totalAppUsageMinutes}m app usage'
+                    : 'Not signed in',
+                ok: user != null,
+                icon: Icons.sync_outlined,
               ),
               const SizedBox(height: Space.s8),
               _item(
@@ -901,7 +1177,7 @@ class _SystemDiagnosticsSheetState extends State<_SystemDiagnosticsSheet> {
                   Expanded(
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.sync_alt, size: 16),
-                      label: const Text('Ping Azure API'),
+                      label: const Text('Ping API'),
                       onPressed: _isChecking ? null : _runCheck,
                     ),
                   ),

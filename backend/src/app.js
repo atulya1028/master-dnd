@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
+const { getIsConnected } = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const dndRoutes = require('./routes/dndRoutes');
@@ -79,14 +80,26 @@ app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
 });
 
+app.get('/delete-account', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'delete-account.html'));
+});
 // API Health Check
 app.get('/api/health', (req, res) => {
+  const smtpConfigured = Boolean(
+    (process.env.SMTP_HOST || '').trim() &&
+      (process.env.SMTP_USER || '').trim() &&
+      (process.env.SMTP_PASS || '').trim()
+  );
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'Master DND API',
-    version: '1.0.0',
+    version: '1.1.0',
     environment: process.env.NODE_ENV || 'development',
+    dbConnected: getIsConnected(),
+    storageMode: getIsConnected() ? 'mongodb' : 'in_memory_fallback',
+    smtpConfigured,
+    uptimeSeconds: Math.round(process.uptime()),
   });
 });
 

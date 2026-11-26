@@ -49,6 +49,14 @@ const dndProfileSchema = new mongoose.Schema(
       type: Number,
       default: 15,
     },
+    autoReplyMessage: {
+      type: String,
+      default: 'I am currently in Do Not Disturb mode and will respond shortly.',
+    },
+    customTag: {
+      type: String,
+      default: '',
+    },
   },
   {
     timestamps: true,

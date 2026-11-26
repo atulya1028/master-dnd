@@ -62,6 +62,11 @@ const requireAuth = async (req, res, next) => {
         avatar: decoded.email ? decoded.email[0].toUpperCase() : 'A',
         isProfileComplete: false,
         dndEnabled: false,
+        customDurations: [30, 60],
+        customContactCategories: ['VIP Contact', 'Family', 'Doctor / Emergency', 'Repeat Caller', 'Work Priority'],
+        customWhitelistOptions: ['Starred', 'Contacts only', 'VIP only', 'Everyone', 'No one'],
+        totalAppUsageMinutes: 0,
+        emergencyContacts: [],
       };
       devStore.users.set(fallbackId, user);
     }

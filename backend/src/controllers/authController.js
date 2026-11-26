@@ -7,6 +7,12 @@ const { sendOtpEmail } = require('../utils/mailer');
 const { generateToken } = require('../utils/token');
 const { getIsConnected } = require('../config/db');
 const devStore = require('../utils/devStore');
+const {
+  DEFAULT_DURATIONS,
+  DEFAULT_CONTACT_CATEGORIES,
+  DEFAULT_WHITELIST_OPTIONS,
+  serializeUser,
+} = require('../utils/serializers');
 
 /**
  * Validates email format
@@ -47,11 +53,17 @@ const sendOtpHandler = async (req, res) => {
     }
 
     const isProduction = process.env.NODE_ENV === 'production';
-    // In production, ALWAYS enforce real OTP and never allow fixed dev OTP or expose testOtp.
-    // In development, uses real OTP if REAL_OTP=true or if FIXED_DEV_OTP is unset.
+    const reviewerEmail = (process.env.REVIEWER_EMAIL || '').trim().toLowerCase();
+    const reviewerOtp = (process.env.REVIEWER_OTP || '').trim();
+    const isReviewerAccount = Boolean(reviewerEmail && reviewerOtp && identifier === reviewerEmail);
+
+    // In production, ALWAYS enforce real OTP unless an explicit REVIEWER_EMAIL + REVIEWER_OTP
+    // pair is configured in environment variables for Play Store review.
     const useRealOtp = isProduction || process.env.REAL_OTP === 'true' || !process.env.FIXED_DEV_OTP;
-    const otpCode = useRealOtp ? generateOtp() : process.env.FIXED_DEV_OTP;
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const otpCode = isReviewerAccount
+      ? reviewerOtp
+      : (useRealOtp ? generateOtp() : process.env.FIXED_DEV_OTP);
+    const expiresAt = new Date(Date.now() + (isReviewerAccount ? 30 * 24 * 60 : 5) * 60 * 1000);
 
     // Always store in memory for ultra-fast, 100% resilient verification
     devStore.otps.set(identifier, {
@@ -136,68 +148,75 @@ const verifyOtpHandler = async (req, res) => {
       }
     }
     const trimmedOtp = otp.toString().trim();
+    const reviewerEmail = (process.env.REVIEWER_EMAIL || '').trim().toLowerCase();
+    const reviewerOtp = (process.env.REVIEWER_OTP || '').trim();
+    const isReviewerMatch = Boolean(
+      reviewerEmail && reviewerOtp && identifier === reviewerEmail && trimmedOtp === reviewerOtp
+    );
 
     let record = null;
-    if (getIsConnected()) {
-      try {
-        record = await Otp.findOne({
-          $or: [{ identifier }, { email: identifier }],
-        }).sort({ createdAt: -1 });
-      } catch (dbErr) {
-        console.warn('[verifyOtpHandler] MongoDB OTP lookup warning:', dbErr.message);
+    if (!isReviewerMatch) {
+      if (getIsConnected()) {
+        try {
+          record = await Otp.findOne({
+            $or: [{ identifier }, { email: identifier }],
+          }).sort({ createdAt: -1 });
+        } catch (dbErr) {
+          console.warn('[verifyOtpHandler] MongoDB OTP lookup warning:', dbErr.message);
+        }
       }
-    }
-    if (!record) {
-      record = devStore.otps.get(identifier);
-    }
+      if (!record) {
+        record = devStore.otps.get(identifier);
+      }
 
-    // Check if OTP was requested
-    if (!record) {
-      return res.status(400).json({
-        success: false,
-        message: 'No active OTP request found. Please request a new code.',
-      });
-    }
+      // Check if OTP was requested
+      if (!record) {
+        return res.status(400).json({
+          success: false,
+          message: 'No active OTP request found. Please request a new code.',
+        });
+      }
 
-    // Check if expired
-    if (new Date() > new Date(record.expiresAt)) {
-      return res.status(400).json({
-        success: false,
-        message: 'This OTP code has expired. Please tap Resend Code.',
-      });
-    }
+      // Check if expired
+      if (new Date() > new Date(record.expiresAt)) {
+        return res.status(400).json({
+          success: false,
+          message: 'This OTP code has expired. Please tap Resend Code.',
+        });
+      }
 
-    // Check attempt lockout
-    if (record.attempts >= 5) {
-      return res.status(429).json({
-        success: false,
-        message: 'Too many incorrect attempts. Please request a new code.',
-      });
-    }
+      // Check attempt lockout
+      if (record.attempts >= 5) {
+        return res.status(429).json({
+          success: false,
+          message: 'Too many incorrect attempts. Please request a new code.',
+        });
+      }
 
-    // Strictly enforce real OTP verification
-    const isMatch = record.otp === trimmedOtp;
+      // Strictly enforce real OTP verification
+      const isMatch = record.otp === trimmedOtp;
 
-    if (!isMatch) {
-      record.attempts = (record.attempts || 0) + 1;
+      if (!isMatch) {
+        record.attempts = (record.attempts || 0) + 1;
+        if (getIsConnected() && typeof record.save === 'function') {
+          try {
+            await record.save();
+          } catch (_) {}
+        }
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid verification code. Please check and try again.',
+          attemptsLeft: 5 - record.attempts,
+        });
+      }
+
+      // Mark OTP as verified
+      record.verified = true;
       if (getIsConnected() && typeof record.save === 'function') {
         try {
           await record.save();
         } catch (_) {}
       }
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid verification code. Please check and try again.',
-        attemptsLeft: 5 - record.attempts,
-      });
-    }
-
-    // Mark OTP as verified
-    record.verified = true;
-    if (getIsConnected() && typeof record.save === 'function') {
-      try {
-        await record.save();
-      } catch (_) {}
     }
 
     // Find or create User by email
@@ -216,6 +235,10 @@ const verifyOtpHandler = async (req, res) => {
             avatar: identifier.charAt(0).toUpperCase() || 'A',
             isProfileComplete: false,
             dndEnabled: false,
+            hasSeededDefaults: true,
+            customDurations: DEFAULT_DURATIONS,
+            customContactCategories: DEFAULT_CONTACT_CATEGORIES,
+            customWhitelistOptions: DEFAULT_WHITELIST_OPTIONS,
           });
           isNewUser = true;
 
@@ -263,6 +286,12 @@ const verifyOtpHandler = async (req, res) => {
           avatar: identifier.charAt(0).toUpperCase() || 'A',
           isProfileComplete: false,
           dndEnabled: false,
+          hasSeededDefaults: true,
+          customDurations: [...DEFAULT_DURATIONS],
+          customContactCategories: [...DEFAULT_CONTACT_CATEGORIES],
+          customWhitelistOptions: [...DEFAULT_WHITELIST_OPTIONS],
+          totalAppUsageMinutes: 0,
+          emergencyContacts: [],
         };
         isNewUser = true;
 
@@ -293,14 +322,7 @@ const verifyOtpHandler = async (req, res) => {
       token,
       isNewUser,
       isProfileComplete: Boolean(user.isProfileComplete),
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        isProfileComplete: Boolean(user.isProfileComplete),
-        dndEnabled: Boolean(user.dndEnabled),
-      },
+      user: serializeUser(user),
     });
   } catch (error) {
     console.error('[verifyOtpHandler] Error:', error);

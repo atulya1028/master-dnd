@@ -292,8 +292,10 @@ class ApiService {
   Future<UserModel> updateProfile({
     String? name,
     String? email,
+    String? phone,
     String? avatar,
     String? bio,
+    Map<String, bool>? notificationPreferences,
   }) async {
     final token = await getToken();
     if (token == null) throw Exception('No session token');
@@ -303,8 +305,12 @@ class ApiService {
     final Map<String, dynamic> body = {};
     if (name != null) body['name'] = name;
     if (email != null) body['email'] = email;
+    if (phone != null) body['phone'] = phone;
     if (avatar != null) body['avatar'] = avatar;
     if (bio != null) body['bio'] = bio;
+    if (notificationPreferences != null) {
+      body['notificationPreferences'] = notificationPreferences;
+    }
 
     try {
       final res = await http
@@ -324,6 +330,123 @@ class ApiService {
       _verifiedBaseUrl = null;
       throw Exception(_formatNetworkError(e));
     }
+  }
+
+  Future<UserModel> updatePreferences({
+    int? addDurationMinutes,
+    int? removeDurationMinutes,
+    String? addContactCategory,
+    String? addWhitelistOption,
+    Map<String, bool>? notificationPreferences,
+    int? activeSessionPlannedMinutes,
+    DateTime? activeSessionEndTime,
+    String? activeProfileName,
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('No session token');
+
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/user/preferences');
+    final Map<String, dynamic> body = {};
+    if (addDurationMinutes != null) body['addDurationMinutes'] = addDurationMinutes;
+    if (removeDurationMinutes != null) body['removeDurationMinutes'] = removeDurationMinutes;
+    if (addContactCategory != null) body['addContactCategory'] = addContactCategory;
+    if (addWhitelistOption != null) body['addWhitelistOption'] = addWhitelistOption;
+    if (notificationPreferences != null) {
+      body['notificationPreferences'] = notificationPreferences;
+    }
+    if (activeSessionPlannedMinutes != null) {
+      body['activeSessionPlannedMinutes'] = activeSessionPlannedMinutes;
+    }
+    if (activeSessionEndTime != null) {
+      body['activeSessionEndTime'] = activeSessionEndTime.toIso8601String();
+    }
+    if (activeProfileName != null) {
+      body['activeProfileName'] = activeProfileName;
+    }
+
+    try {
+      final res = await http
+          .put(
+            uri,
+            headers: _headers(token),
+            body: jsonEncode(body),
+          )
+          .timeout(_requestTimeout);
+
+      final data = _safeDecodeJson(res.body, res.statusCode);
+      if (res.statusCode == 200 && data['user'] != null) {
+        return UserModel.fromJson(data['user'] as Map<String, dynamic>);
+      }
+      throw Exception(data['message'] ?? 'Failed to save preferences');
+    } catch (e) {
+      throw Exception(_formatNetworkError(e));
+    }
+  }
+
+  Future<List<LetThroughContact>> getContacts() async {
+    final token = await getToken();
+    if (token == null) return [];
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/user/contacts');
+      final res = await http.get(uri, headers: _headers(token)).timeout(_requestTimeout);
+      if (res.statusCode == 200) {
+        final data = _safeDecodeJson(res.body, res.statusCode);
+        final list = data['contacts'] as List<dynamic>? ?? [];
+        return list.map((e) => LetThroughContact.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService.getContacts] Error: $e');
+    }
+    return [];
+  }
+
+  Future<List<LetThroughContact>> addContact({
+    required String name,
+    String phone = '',
+    String relationship = 'VIP Contact',
+  }) async {
+    final token = await getToken();
+    if (token == null) throw Exception('No session token');
+
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/user/contacts');
+    final res = await http
+        .post(
+          uri,
+          headers: _headers(token),
+          body: jsonEncode({
+            'name': name,
+            'phone': phone,
+            'relationship': relationship,
+            'isVip': true,
+          }),
+        )
+        .timeout(_requestTimeout);
+
+    final data = _safeDecodeJson(res.body, res.statusCode);
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final list = data['contacts'] as List<dynamic>? ?? [];
+      return list.map((e) => LetThroughContact.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    throw Exception(data['message'] ?? 'Failed to add contact');
+  }
+
+  Future<List<LetThroughContact>> deleteContact(String contactId) async {
+    final token = await getToken();
+    if (token == null) throw Exception('No session token');
+
+    final activeBase = await resolveBaseUrl();
+    final uri = Uri.parse('$activeBase/user/contacts/$contactId');
+    final res = await http.delete(uri, headers: _headers(token)).timeout(_requestTimeout);
+    final data = _safeDecodeJson(res.body, res.statusCode);
+    if (res.statusCode == 200) {
+      final list = data['contacts'] as List<dynamic>? ?? [];
+      return list.map((e) => LetThroughContact.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    throw Exception(data['message'] ?? 'Failed to remove contact');
   }
 
   // -------------------------------------------------------------
@@ -415,15 +538,23 @@ class ApiService {
     }
   }
 
-  Future<bool> toggleMasterDnd({bool? enabled}) async {
+  Future<Map<String, dynamic>> toggleMasterDnd({
+    bool? enabled,
+    int? durationMinutes,
+    DateTime? endTime,
+    String? profileName,
+  }) async {
     final token = await getToken();
-    if (token == null) return enabled ?? false;
+    if (token == null) return {'dndEnabled': enabled ?? false};
 
     try {
       final activeBase = await resolveBaseUrl();
       final uri = Uri.parse('$activeBase/dnd/toggle');
       final Map<String, dynamic> body = {};
       if (enabled != null) body['enabled'] = enabled;
+      if (durationMinutes != null) body['durationMinutes'] = durationMinutes;
+      if (endTime != null) body['endTime'] = endTime.toIso8601String();
+      if (profileName != null && profileName.isNotEmpty) body['profileName'] = profileName;
 
       final res = await http
           .post(
@@ -434,13 +565,12 @@ class ApiService {
           .timeout(_requestTimeout);
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
-        return data['dndEnabled'] == true;
+        return _safeDecodeJson(res.body, res.statusCode);
       }
     } catch (e) {
       debugPrint('[ApiService.toggleMasterDnd] Error: $e');
     }
-    return enabled ?? false;
+    return {'dndEnabled': enabled ?? false};
   }
 
   // -------------------------------------------------------------
@@ -502,6 +632,9 @@ class ApiService {
     String? title,
     String? subtitle,
     String? triggerType,
+    List<String>? days,
+    String? targetProfileName,
+    String? customCondition,
   }) async {
     final token = await getToken();
     if (token == null) return false;
@@ -514,6 +647,9 @@ class ApiService {
       if (title != null) body['title'] = title;
       if (subtitle != null) body['subtitle'] = subtitle;
       if (triggerType != null) body['triggerType'] = triggerType;
+      if (days != null) body['days'] = days;
+      if (targetProfileName != null) body['targetProfileName'] = targetProfileName;
+      if (customCondition != null) body['customCondition'] = customCondition;
 
       final res = await http
           .put(
@@ -547,12 +683,117 @@ class ApiService {
   }
 
   // -------------------------------------------------------------
-  // INSIGHTS & STATS
+  // ACTIVITY LOGS, APP USAGE & STABILITY ANALYTICS
   // -------------------------------------------------------------
+
+  Future<List<DndActivityLog>> getActivityLogs() async {
+    final token = await getToken();
+    if (token == null) return [];
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/logs');
+      final res = await http.get(uri, headers: _headers(token)).timeout(_requestTimeout);
+      if (res.statusCode == 200) {
+        final data = _safeDecodeJson(res.body, res.statusCode);
+        final list = data['logs'] as List<dynamic>? ?? [];
+        return list.map((e) => DndActivityLog.fromJson(e as Map<String, dynamic>)).toList();
+      }
+    } catch (e) {
+      debugPrint('[ApiService.getActivityLogs] Error: $e');
+    }
+    return [];
+  }
+
+  Future<DndActivityLog?> createActivityLog({
+    required String profileName,
+    required int durationMinutes,
+    int? plannedMinutes,
+    bool completedWithoutEarlyExit = true,
+    int silencedCount = 0,
+    int letThroughCount = 0,
+    int focusStabilityRating = 4,
+    String notes = '',
+    DateTime? date,
+  }) async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/logs');
+      final res = await http
+          .post(
+            uri,
+            headers: _headers(token),
+            body: jsonEncode({
+              'profileName': profileName,
+              'durationMinutes': durationMinutes,
+              'plannedMinutes': plannedMinutes ?? durationMinutes,
+              'completedWithoutEarlyExit': completedWithoutEarlyExit,
+              'silencedCount': silencedCount,
+              'letThroughCount': letThroughCount,
+              'focusStabilityRating': focusStabilityRating,
+              'notes': notes,
+              if (date != null) 'date': date.toIso8601String(),
+            }),
+          )
+          .timeout(_requestTimeout);
+
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final data = _safeDecodeJson(res.body, res.statusCode);
+        if (data['log'] != null) {
+          return DndActivityLog.fromJson(data['log'] as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[ApiService.createActivityLog] Error: $e');
+    }
+    return null;
+  }
+
+  Future<bool> deleteActivityLog(String logId) async {
+    final token = await getToken();
+    if (token == null) return false;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/logs/$logId');
+      final res = await http.delete(uri, headers: _headers(token)).timeout(_requestTimeout);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugPrint('[ApiService.deleteActivityLog] Error: $e');
+      return false;
+    }
+  }
+
+  Future<int?> pingAppUsage({int minutes = 1}) async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/usage-ping');
+      final res = await http
+          .post(
+            uri,
+            headers: _headers(token),
+            body: jsonEncode({'minutes': minutes}),
+          )
+          .timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final data = _safeDecodeJson(res.body, res.statusCode);
+        return (data['totalAppUsageMinutes'] as num?)?.toInt();
+      }
+    } catch (e) {
+      debugPrint('[ApiService.pingAppUsage] Error: $e');
+    }
+    return null;
+  }
 
   Future<InsightsData> getInsights({int range = 0}) async {
     final token = await getToken();
-    if (token == null) return InsightsData.defaults();
+    if (token == null) return InsightsData.empty();
 
     try {
       final activeBase = await resolveBaseUrl();
@@ -568,7 +809,26 @@ class ApiService {
     } catch (e) {
       debugPrint('[ApiService.getInsights] Error: $e');
     }
-    return InsightsData.defaults();
+    return InsightsData.empty();
+  }
+
+  Future<StabilityReportData> getStabilityReport({int range = 0}) async {
+    final token = await getToken();
+    if (token == null) return StabilityReportData.empty();
+
+    try {
+      final activeBase = await resolveBaseUrl();
+      final uri = Uri.parse('$activeBase/dnd/stability-report?range=$range');
+      final res = await http.get(uri, headers: _headers(token)).timeout(_requestTimeout);
+
+      if (res.statusCode == 200) {
+        final data = _safeDecodeJson(res.body, res.statusCode);
+        return StabilityReportData.fromJson(data);
+      }
+    } catch (e) {
+      debugPrint('[ApiService.getStabilityReport] Error: $e');
+    }
+    return StabilityReportData.empty();
   }
 
   // -------------------------------------------------------------
@@ -589,8 +849,12 @@ class ApiService {
           'latencyMs': stopwatch.elapsedMilliseconds,
           'status': data['status'] ?? 'healthy',
           'service': data['service'] ?? 'Master DND API',
-          'version': data['version'] ?? '1.0.0',
+          'version': data['version'] ?? '1.1.0',
           'environment': data['environment'] ?? 'production',
+          'dbConnected': data['dbConnected'] == true,
+          'storageMode': data['storageMode'] ?? 'in_memory_fallback',
+          'smtpConfigured': data['smtpConfigured'] == true,
+          'uptimeSeconds': data['uptimeSeconds'] ?? 0,
           'baseUrl': activeBase,
         };
       }

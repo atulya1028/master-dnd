@@ -21,6 +21,18 @@ const dndRuleSchema = new mongoose.Schema(
       type: String,
       default: 'schedule',
     },
+    days: {
+      type: [String],
+      default: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    },
+    targetProfileName: {
+      type: String,
+      default: '',
+    },
+    customCondition: {
+      type: String,
+      default: '',
+    },
     active: {
       type: Boolean,
       default: true,

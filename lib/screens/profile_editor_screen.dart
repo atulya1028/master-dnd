@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_event.dart';
 import '../bloc/dnd/dnd_bloc.dart';
 import '../bloc/dnd/dnd_event.dart';
 import '../core/models.dart';
 import '../core/tokens.dart';
 import '../widgets/widgets.dart';
 
-/// Figma: "5 Profile editor" powered by DndBloc.
+/// Figma: "5 Profile editor" powered by DndBloc & user-defined choices saved to MongoDB.
 class ProfileEditorScreen extends StatefulWidget {
   const ProfileEditorScreen({super.key, this.profile});
 
@@ -19,6 +21,9 @@ class ProfileEditorScreen extends StatefulWidget {
 
 class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
   late final TextEditingController _nameController;
+  late final TextEditingController _metaController;
+  late final TextEditingController _autoReplyMsgController;
+  late final TextEditingController _customTagController;
   late IconData _icon;
   late int _mode;
   late bool _autoReply;
@@ -26,7 +31,6 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
   late String _callWhitelist;
   late String _messageWhitelist;
   late int _repeatCallersWindow;
-  late String _meta;
 
   static const List<IconData> _selectableIcons = [
     DndIcons.moon,
@@ -45,6 +49,13 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
     super.initState();
     final p = widget.profile;
     _nameController = TextEditingController(text: p?.name ?? 'New Profile');
+    _metaController = TextEditingController(
+      text: p?.meta.isNotEmpty == true ? p!.meta : '10:00 PM – 7:00 AM',
+    );
+    _autoReplyMsgController = TextEditingController(
+      text: p?.autoReplyMessage ?? 'I am currently in Do Not Disturb mode and will respond shortly.',
+    );
+    _customTagController = TextEditingController(text: p?.customTag ?? '');
     _icon = p?.icon ?? DndIcons.moon;
     _mode = p?.mode.index ?? DndMode.priorityOnly.index;
     _autoReply = p?.autoReply ?? true;
@@ -52,7 +63,6 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
     _callWhitelist = p?.callWhitelist ?? 'Starred';
     _messageWhitelist = p?.messageWhitelist ?? 'VIP only';
     _repeatCallersWindow = p?.repeatCallersWindowMin ?? 15;
-    _meta = p?.meta.isNotEmpty == true ? p!.meta : '10:00 PM – 7:00 AM';
   }
 
   static String _formatTime(TimeOfDay time) {
@@ -78,13 +88,16 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
     if (end == null || !mounted) return;
 
     setState(() {
-      _meta = '${_formatTime(start)} – ${_formatTime(end)}';
+      _metaController.text = '${_formatTime(start)} – ${_formatTime(end)}';
     });
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _metaController.dispose();
+    _autoReplyMsgController.dispose();
+    _customTagController.dispose();
     super.dispose();
   }
 
@@ -103,18 +116,20 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
         .copyWith(
       name: name,
       icon: _icon,
-      meta: _meta,
+      meta: _metaController.text.trim(),
       mode: modeEnum,
       autoReply: _autoReply,
       hideNotifications: _hideNotifications,
       callWhitelist: _callWhitelist,
       messageWhitelist: _messageWhitelist,
       repeatCallersWindowMin: _repeatCallersWindow,
+      autoReplyMessage: _autoReplyMsgController.text.trim(),
+      customTag: _customTagController.text.trim(),
     );
 
     context.read<DndBloc>().add(DndSaveProfileRequested(updated));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Profile "$name" saved successfully')),
+      SnackBar(content: Text('Profile "$name" saved to database')),
     );
     Navigator.of(context).pop();
   }
@@ -204,10 +219,14 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
     required List<String> options,
     required String current,
     required ValueChanged<String> onSelected,
+    bool allowCustom = true,
+    bool numericMinutes = false,
   }) {
     final c = context.dnd;
+    final customCtrl = TextEditingController();
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: c.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.card)),
@@ -215,26 +234,73 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
       builder: (ctx) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: Space.s16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: Space.s24),
-                  child: Text(title, style: ctx.text.titleLarge),
-                ),
-                const SizedBox(height: Space.s12),
-                for (final opt in options)
-                  ListTile(
-                    title: Text(opt, style: ctx.text.titleMedium),
-                    trailing: opt == current ? Icon(Icons.check, color: c.accent) : null,
-                    onTap: () {
-                      onSelected(opt);
-                      Navigator.of(ctx).pop();
-                    },
+            padding: EdgeInsets.only(
+              top: Space.s16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + Space.s16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: Space.s24),
+                    child: Text(title, style: ctx.text.titleLarge),
                   ),
-              ],
+                  const SizedBox(height: Space.s12),
+                  for (final opt in options)
+                    ListTile(
+                      title: Text(opt, style: ctx.text.titleMedium),
+                      trailing: opt == current ? Icon(Icons.check, color: c.accent) : null,
+                      onTap: () {
+                        onSelected(opt);
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                  if (allowCustom) ...[
+                    const DndDivider(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(Space.s24, Space.s12, Space.s24, Space.s8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: customCtrl,
+                              keyboardType:
+                                  numericMinutes ? TextInputType.number : TextInputType.text,
+                              decoration: InputDecoration(
+                                hintText: numericMinutes
+                                    ? 'Custom minutes (e.g. 10)'
+                                    : 'Add custom choice (saved to DB)',
+                                isDense: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: Space.s8),
+                          TextButton(
+                            onPressed: () {
+                              final raw = customCtrl.text.trim();
+                              if (raw.isEmpty) return;
+                              if (numericMinutes) {
+                                final mins = int.tryParse(raw);
+                                if (mins != null && mins > 0) {
+                                  onSelected('$mins min');
+                                  Navigator.of(ctx).pop();
+                                }
+                              } else {
+                                context.read<AuthBloc>().add(AuthAddCustomWhitelistRequested(raw));
+                                onSelected(raw);
+                                Navigator.of(ctx).pop();
+                              }
+                            },
+                            child: const Text('Add & Use'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         );
@@ -246,6 +312,18 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
   Widget build(BuildContext context) {
     final c = context.dnd;
     final nav = Navigator.of(context);
+    final user = context.watch<AuthBloc>().currentUser;
+    final whitelistChoices = <String>{
+      ...?user?.customWhitelistOptions,
+      'Starred',
+      'Contacts only',
+      'VIP only',
+      'Work Team',
+      'Everyone',
+      'No one',
+      _callWhitelist,
+      _messageWhitelist,
+    }.where((e) => e.isNotEmpty).toList();
 
     Widget toggleRow(String title, String sub, bool value, ValueChanged<bool> onChanged) => Padding(
           padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: Space.s12),
@@ -331,15 +409,30 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                     onSelected: (i) => setState(() => _mode = i),
                   ),
                   const SizedBox(height: Space.s16),
-                  const OverlineText('Active Schedule Hours'),
+                  const OverlineText('Schedule / Description'),
                   const SizedBox(height: Space.s8),
                   DndCard(
-                    child: SettingRow(
-                      icon: DndIcons.clock,
-                      title: 'Schedule Hours',
-                      subtitle: 'Tap to pick custom active hours',
-                      value: _meta,
-                      onTap: _pickScheduleTimes,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _metaController,
+                              style: context.text.bodyLarge,
+                              decoration: const InputDecoration(
+                                hintText: 'e.g. 10:00 PM – 7:00 AM',
+                                border: InputBorder.none,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(DndIcons.clock, color: c.accent),
+                            tooltip: 'Pick Start & End Time',
+                            onPressed: _pickScheduleTimes,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: Space.s16),
@@ -351,7 +444,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                       onTap: () {
                         _showOptionsPicker(
                           title: 'Calls from',
-                          options: const ['Starred', 'Contacts only', 'Everyone', 'No one'],
+                          options: whitelistChoices,
                           current: _callWhitelist,
                           onSelected: (val) => setState(() => _callWhitelist = val),
                         );
@@ -359,7 +452,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                       child: SettingRow(
                         icon: DndIcons.phone,
                         title: 'Calls from',
-                        subtitle: 'Tap to configure caller access',
+                        subtitle: 'Tap to pick or add custom group',
                         value: _callWhitelist,
                       ),
                     ),
@@ -368,7 +461,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                       onTap: () {
                         _showOptionsPicker(
                           title: 'Messages from',
-                          options: const ['VIP only', 'Contacts only', 'Everyone', 'No one'],
+                          options: whitelistChoices,
                           current: _messageWhitelist,
                           onSelected: (val) => setState(() => _messageWhitelist = val),
                         );
@@ -376,7 +469,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                       child: SettingRow(
                         icon: DndIcons.user,
                         title: 'Messages from',
-                        subtitle: 'Tap to configure message access',
+                        subtitle: 'Tap to pick or add custom group',
                         value: _messageWhitelist,
                       ),
                     ),
@@ -387,6 +480,7 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                           title: 'Repeat callers',
                           options: const ['15 min', '5 min', '3 min', 'Off'],
                           current: _repeatCallersWindow == 0 ? 'Off' : '$_repeatCallersWindow min',
+                          numericMinutes: true,
                           onSelected: (val) {
                             setState(() {
                               _repeatCallersWindow = val == 'Off'
@@ -406,11 +500,46 @@ class _ProfileEditorScreenState extends State<ProfileEditorScreen> {
                   ]),
                   const SizedBox(height: Space.s16),
                   DndGroup(children: [
-                    toggleRow('Auto-reply', 'Text callers that you are asleep', _autoReply,
+                    toggleRow('Auto-reply', 'Send custom message when unavailable', _autoReply,
                         (v) => setState(() => _autoReply = v)),
                     toggleRow('Hide notifications', 'Keep the lock screen clear', _hideNotifications,
                         (v) => setState(() => _hideNotifications = v)),
                   ]),
+                  if (_autoReply) ...[
+                    const SizedBox(height: Space.s16),
+                    const OverlineText('Custom Auto-Reply Message'),
+                    const SizedBox(height: Space.s8),
+                    DndCard(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                        child: TextField(
+                          controller: _autoReplyMsgController,
+                          maxLines: 2,
+                          style: context.text.bodyMedium,
+                          decoration: const InputDecoration(
+                            hintText: 'Enter custom auto-reply message...',
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: Space.s16),
+                  const OverlineText('Custom Label / Tag (Optional)'),
+                  const SizedBox(height: Space.s8),
+                  DndCard(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: Space.s16, vertical: 4),
+                      child: TextField(
+                        controller: _customTagController,
+                        style: context.text.bodyMedium,
+                        decoration: const InputDecoration(
+                          hintText: 'e.g. Deep Focus, Night Routine',
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: Space.s24),
                   AppButton('Save profile', onPressed: _handleSave),
                   const SizedBox(height: Space.s16),
